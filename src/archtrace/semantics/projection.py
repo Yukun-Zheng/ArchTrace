@@ -55,43 +55,43 @@ def project_paper_view(
     include = {role.value for role in selected_policy.include_roles}
     exclude = {role.value for role in selected_policy.exclude_roles}
     semantic_nodes: list[ArchNode] = []
-    for node in graph.nodes:
-        if node.level != NodeLevel.SEMANTIC or node.role is None:
+    for semantic_node in graph.nodes:
+        if semantic_node.level != NodeLevel.SEMANTIC or semantic_node.role is None:
             continue
-        confidence = _confidence(node.attributes.get("confidence"))
+        confidence = _confidence(semantic_node.attributes.get("confidence"))
         if confidence < selected_policy.min_confidence:
             continue
-        if include and node.role not in include:
+        if include and semantic_node.role not in include:
             continue
-        if node.role in exclude:
+        if semantic_node.role in exclude:
             continue
-        semantic_nodes.append(node)
+        semantic_nodes.append(semantic_node)
 
     semantic_nodes.sort(
-        key=lambda node: (
-            _role_priority(node.role or "unknown"),
-            _source_sort_key(node),
-            node.id,
+        key=lambda semantic_node: (
+            _role_priority(semantic_node.role or "unknown"),
+            _source_sort_key(semantic_node),
+            semantic_node.id,
         )
     )
     semantic_nodes = semantic_nodes[: selected_policy.max_components]
 
     paper_nodes = [
         PaperNode(
-            id=node.id,
-            label=node.label,
-            role=node.role or "unknown",
-            member_ids=tuple(sorted(_member_ids(node))),
-            modalities=tuple(sorted(_modalities(node))),
-            confidence=_confidence(node.attributes.get("confidence")),
+            id=semantic_node.id,
+            label=semantic_node.label,
+            role=semantic_node.role or "unknown",
+            member_ids=tuple(sorted(_member_ids(semantic_node))),
+            modalities=tuple(sorted(_modalities(semantic_node))),
+            confidence=_confidence(semantic_node.attributes.get("confidence")),
         )
-        for node in semantic_nodes
+        for semantic_node in semantic_nodes
     ]
-    selected_ids = {node.id for node in paper_nodes}
+    selected_ids = {paper_node.id for paper_node in paper_nodes}
     member_to_semantic: dict[str, str] = {}
-    for node in paper_nodes:
-        for member_id in node.member_ids:
-            member_to_semantic.setdefault(member_id, node.id)
+    for paper_node in paper_nodes:
+        for member_id in paper_node.member_ids:
+            member_to_semantic.setdefault(member_id, paper_node.id)
 
     pair_to_edges: dict[tuple[str, str], list[str]] = {}
     for edge in graph.edges:
