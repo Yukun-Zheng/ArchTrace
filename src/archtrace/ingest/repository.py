@@ -13,7 +13,6 @@ from pathlib import Path
 
 from archtrace import ir as atir
 
-
 IGNORED_PARTS = {
     ".git",
     ".hg",
