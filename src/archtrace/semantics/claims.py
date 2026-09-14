@@ -56,10 +56,7 @@ _ROLE_PATTERNS: tuple[tuple[SemanticRole, str], ...] = (
         r"\b(?:multi[\s_-]*modal|cross[\s_-]*modal)[\s_-]*fusion\b"
         r"|\bcross[\s_-]*attention\b|多模态融合|跨模态融合",
     ),
-    (
-        SemanticRole.TRANSFORMER_BACKBONE,
-        r"\btransformer\b|Transformer主干",
-    ),
+    (SemanticRole.TRANSFORMER_BACKBONE, r"\btransformer\b|Transformer主干"),
     (
         SemanticRole.DIFFUSION_DENOISER,
         r"\b(?:diffusion|denoiser|denoising)\b|扩散模型|去噪器",
@@ -104,99 +101,52 @@ def add_author_claims(
     graph: ArchTraceIR,
     snippets: list[ContextSnippet],
 ) -> ArchTraceIR:
+    """Add source-grounded declarations and compare only provable implementation facts."""
+
     result = graph.model_copy(deep=True)
     used = _ids(result)
     cache: dict[tuple[str, str], Claim | None] = {}
 
     for declaration in extract_author_declarations(snippets):
-        evidence_id = _next("evidence.author", used)
-        result.evidence.append(
-            Evidence(
-                id=evidence_id,
-                kind=EvidenceKind.AUTHOR,
-                status=FactStatus.DECLARED,
-                description=(
-                    "Author declaration recovered from repository documentation."
-                ),
-                source=SourceSpan(
-                    path=declaration.path,
-                    start_line=declaration.line,
-                    end_line=declaration.line,
-                ),
-                metadata={
-                    "excerpt": declaration.excerpt,
-                    "semantic_role": declaration.role.value,
-                    "predicate": declaration.predicate,
-                },
-            )
-        )
+        evidence_id = _add_author_evidence(result, declaration, used)
         subject, implementation = _resolve_subject(
             result,
             declaration,
             evidence_id,
             used,
         )
-        author = Claim(
-            id=_next("claim.author", used),
-            subject_id=subject.id,
-            predicate=declaration.predicate,
-            value=declaration.value,
-            evidence_ids=[evidence_id],
-            status=FactStatus.DECLARED,
-            metadata={
-                "semantic_role": declaration.role.value,
-                "source_path": declaration.path,
-                "source_line": declaration.line,
-                "implementation_check": ClaimCheckStatus.UNRESOLVED.value,
-            },
-        )
+        author = _author_claim(subject, declaration, evidence_id, used)
         result.claims.append(author)
         if implementation is None:
             continue
 
         key = (implementation.id, declaration.predicate)
         if key not in cache:
-            cache[key] = _implementation_claim(
+            created = _implementation_claim(
                 result,
                 implementation,
                 declaration.predicate,
                 used,
             )
-            if cache[key] is not None:
-                result.claims.append(cache[key])
-        impl = cache[key]
-        if impl is None:
-            continue
+            cache[key] = created
+            if created is not None:
+                result.claims.append(created)
 
-        author.metadata["implementation_claim_id"] = impl.id
-        if impl.value == author.value:
-            author.metadata["implementation_check"] = (
-                ClaimCheckStatus.SUPPORTED.value
-            )
+        implementation_claim = cache[key]
+        if implementation_claim is None:
             continue
-
-        author.metadata["implementation_check"] = (
-            ClaimCheckStatus.CONTRADICTED.value
-        )
-        result.conflicts.append(
-            Conflict(
-                id=_next("conflict.author_implementation", used),
-                claim_ids=[author.id, impl.id],
-                kind=ConflictKind.AUTHOR_IMPLEMENTATION_MISMATCH,
-                status=ConflictStatus.OPEN,
-                description=(
-                    f"Author {author.predicate}={author.value!r} contradicts "
-                    f"implementation {impl.value!r}."
-                ),
-                metadata={"semantic_role": declaration.role.value},
-            )
+        _compare_claims(
+            result,
+            author,
+            implementation_claim,
+            declaration,
+            used,
         )
 
     result.metadata["author_claims"] = {
         "backend": "deterministic_document_claims_v0",
         "claim_count": sum(
-            claim.id.startswith("claim.author.")
-            for claim in result.claims
+            claim.id.startswith("claim.author.") for claim in result.claims
         ),
         "conflict_count": sum(
             conflict.kind == ConflictKind.AUTHOR_IMPLEMENTATION_MISMATCH
@@ -209,14 +159,12 @@ def add_author_claims(
 def extract_author_declarations(
     snippets: list[ContextSnippet],
 ) -> list[AuthorDeclaration]:
+    """Extract explicit, line-local component and frozen/trainable declarations."""
+
     declarations: list[AuthorDeclaration] = []
     seen: set[tuple[str, int, SemanticRole, str, bool]] = set()
-
     for snippet in snippets:
-        for line_number, raw in enumerate(
-            snippet.text.splitlines(),
-            start=1,
-        ):
+        for line_number, raw in enumerate(snippet.text.splitlines(), start=1):
             line = raw.strip()
             if not line:
                 continue
@@ -224,7 +172,7 @@ def extract_author_declarations(
                 match = pattern.search(line)
                 if match is None:
                     continue
-                _append(
+                _append_declaration(
                     declarations,
                     seen,
                     snippet.path,
@@ -236,7 +184,7 @@ def extract_author_declarations(
                 )
                 frozen = _frozen_value(line)
                 if frozen is not None:
-                    _append(
+                    _append_declaration(
                         declarations,
                         seen,
                         snippet.path,
@@ -249,7 +197,84 @@ def extract_author_declarations(
     return declarations
 
 
-def _append(
+def _add_author_evidence(
+    graph: ArchTraceIR,
+    declaration: AuthorDeclaration,
+    used: set[str],
+) -> str:
+    evidence_id = _next("evidence.author", used)
+    graph.evidence.append(
+        Evidence(
+            id=evidence_id,
+            kind=EvidenceKind.AUTHOR,
+            status=FactStatus.DECLARED,
+            description="Author declaration recovered from repository documentation.",
+            source=SourceSpan(
+                path=declaration.path,
+                start_line=declaration.line,
+                end_line=declaration.line,
+            ),
+            metadata={
+                "excerpt": declaration.excerpt,
+                "semantic_role": declaration.role.value,
+                "predicate": declaration.predicate,
+            },
+        )
+    )
+    return evidence_id
+
+
+def _author_claim(
+    subject: ArchNode,
+    declaration: AuthorDeclaration,
+    evidence_id: str,
+    used: set[str],
+) -> Claim:
+    return Claim(
+        id=_next("claim.author", used),
+        subject_id=subject.id,
+        predicate=declaration.predicate,
+        value=declaration.value,
+        evidence_ids=[evidence_id],
+        status=FactStatus.DECLARED,
+        metadata={
+            "semantic_role": declaration.role.value,
+            "source_path": declaration.path,
+            "source_line": declaration.line,
+            "implementation_check": ClaimCheckStatus.UNRESOLVED.value,
+        },
+    )
+
+
+def _compare_claims(
+    graph: ArchTraceIR,
+    author: Claim,
+    implementation: Claim,
+    declaration: AuthorDeclaration,
+    used: set[str],
+) -> None:
+    author.metadata["implementation_claim_id"] = implementation.id
+    if implementation.value == author.value:
+        author.metadata["implementation_check"] = ClaimCheckStatus.SUPPORTED.value
+        return
+
+    author.metadata["implementation_check"] = ClaimCheckStatus.CONTRADICTED.value
+    graph.conflicts.append(
+        Conflict(
+            id=_next("conflict.author_implementation", used),
+            claim_ids=[author.id, implementation.id],
+            kind=ConflictKind.AUTHOR_IMPLEMENTATION_MISMATCH,
+            status=ConflictStatus.OPEN,
+            description=(
+                f"Author {author.predicate}={author.value!r} contradicts "
+                f"implementation {implementation.value!r}."
+            ),
+            metadata={"semantic_role": declaration.role.value},
+        )
+    )
+
+
+def _append_declaration(
     output: list[AuthorDeclaration],
     seen: set[tuple[str, int, SemanticRole, str, bool]],
     path: str,
@@ -294,7 +319,7 @@ def _resolve_subject(
     if len(matches) == 1:
         return matches[0], matches[0]
 
-    node = ArchNode(
+    declaration_node = ArchNode(
         id=_next("semantic.author_declaration", used),
         level=NodeLevel.SEMANTIC,
         kind=NodeKind.SEMANTIC_COMPONENT,
@@ -312,13 +337,11 @@ def _resolve_subject(
         attributes={
             "declaration_only": True,
             "member_ids": [],
-            "candidate_implementation_subject_ids": [
-                item.id for item in matches
-            ],
+            "candidate_implementation_subject_ids": [item.id for item in matches],
         },
     )
-    graph.nodes.append(node)
-    return node, None
+    graph.nodes.append(declaration_node)
+    return declaration_node, None
 
 
 def _implementation_claim(
@@ -369,42 +392,34 @@ def _frozen_from_mechanics(
         ):
             value = node.attributes.get(key)
             if isinstance(value, bool):
-                frozen = (not value) if invert else value
-                votes.append((frozen, list(node.evidence_ids)))
+                votes.append(((not value) if invert else value, list(node.evidence_ids)))
         if (
             node.kind == NodeKind.PARAMETER
             and node.tensor is not None
             and node.tensor.requires_grad is not None
         ):
-            votes.append(
-                (
-                    not node.tensor.requires_grad,
-                    list(node.evidence_ids),
-                )
-            )
+            votes.append((not node.tensor.requires_grad, list(node.evidence_ids)))
 
     if not votes or len({value for value, _ in votes}) != 1:
         return None
     evidence_ids = sorted(
-        {
-            evidence_id
-            for _, ids in votes
-            for evidence_id in ids
-        }
+        evidence_id
+        for _, vote_evidence in votes
+        for evidence_id in vote_evidence
     )
-    return votes[0][0], evidence_ids
+    return votes[0][0], sorted(set(evidence_ids))
 
 
-def _related(
-    graph: ArchTraceIR,
-    semantic: ArchNode,
-) -> list[ArchNode]:
-    raw = semantic.attributes.get("member_ids", [])
+def _related(graph: ArchTraceIR, semantic: ArchNode) -> list[ArchNode]:
+    raw_members = semantic.attributes.get("member_ids", [])
     members = (
-        {item for item in raw if isinstance(item, str)}
-        if isinstance(raw, list)
+        {item for item in raw_members if isinstance(item, str)}
+        if isinstance(raw_members, list)
         else set()
     )
+    if not members:
+        return []
+
     by_id = {node.id: node for node in graph.nodes}
     children: dict[str, set[str]] = {}
     for edge in graph.edges:
@@ -425,10 +440,9 @@ def _related(
             queue.append(child)
 
     return [
-        by_id[item]
-        for item in sorted(related)
-        if item in by_id
-        and by_id[item].level != NodeLevel.SEMANTIC
+        by_id[node_id]
+        for node_id in sorted(related)
+        if node_id in by_id and by_id[node_id].level != NodeLevel.SEMANTIC
     ]
 
 
@@ -449,22 +463,19 @@ def _confidence(node: ArchNode) -> float:
     return max(0.0, min(1.0, float(value)))
 
 
-def _presence(
-    line: str,
-    match: re.Match[str],
-) -> bool:
+def _presence(line: str, match: re.Match[str]) -> bool:
     before = line[: match.start()].lower()[-80:]
     after = line[match.end() :].lower()[:80]
-    neg_before = re.search(
+    negative_before = re.search(
         r"(?:without|no|does\s+not\s+use|doesn't\s+use|do\s+not\s+use|"
         r"not\s+using|不使用|没有|无)\s*(?:an?\s+|the\s+)?$",
         before,
     )
-    neg_after = re.match(
+    negative_after = re.match(
         r"\s*(?:is\s+not\s+used|is\s+absent|is\s+disabled|未使用|不存在)",
         after,
     )
-    return neg_before is None and neg_after is None
+    return negative_before is None and negative_after is None
 
 
 def _frozen_value(line: str) -> bool | None:
