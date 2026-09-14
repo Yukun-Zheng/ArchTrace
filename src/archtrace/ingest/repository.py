@@ -11,7 +11,7 @@ import ast
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import archtrace.ir as atir
+from archtrace import ir as atir
 
 
 IGNORED_PARTS = {
