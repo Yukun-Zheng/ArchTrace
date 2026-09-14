@@ -12,6 +12,7 @@ from rich.table import Table
 
 from archtrace.ingest import build_static_ir, scan_repository
 from archtrace.ir import load_atir_json
+from archtrace.web_bundle import embed_source_files
 
 app = typer.Typer(
     name="archtrace",
@@ -71,7 +72,7 @@ def analyze(
         typer.Option("--output", "-o", help="ATIR JSON output path."),
     ] = Path(".archtrace/project.atir.json"),
 ) -> None:
-    """Run the M0 static analyzer and write a validated ATIR document."""
+    """Run the static analyzer and write a validated ATIR document."""
     summary = scan_repository(repository)
     graph = build_static_ir(summary)
 
@@ -82,6 +83,46 @@ def analyze(
         "[green]ATIR written[/green] "
         f"{output} ({len(graph.nodes)} nodes, {len(graph.edges)} edges, "
         f"{len(graph.evidence)} evidence records)"
+    )
+
+
+@app.command("web-bundle")
+def web_bundle(
+    atir: Annotated[Path, typer.Argument(help="Path to a validated ATIR JSON document.")],
+    source_root: Annotated[
+        Path,
+        typer.Option(
+            "--source-root",
+            help="Repository root used to safely embed source files referenced by ATIR spans.",
+        ),
+    ],
+    output: Annotated[
+        Path,
+        typer.Option("--output", "-o", help="Browser-ready ATIR bundle output path."),
+    ] = Path(".archtrace/project.web.atir.json"),
+    max_file_kb: Annotated[
+        int,
+        typer.Option(help="Maximum UTF-8 source file size to embed, in KiB."),
+    ] = 256,
+    max_total_mb: Annotated[
+        int,
+        typer.Option(help="Maximum total embedded source size, in MiB."),
+    ] = 5,
+) -> None:
+    """Embed source text for the browser explorer without mutating ATIR facts."""
+    graph = load_atir_json(atir.read_text(encoding="utf-8"))
+    bundled = embed_source_files(
+        graph,
+        source_root,
+        max_file_bytes=max_file_kb * 1024,
+        max_total_bytes=max_total_mb * 1024 * 1024,
+    )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(bundled.model_dump_json(indent=2), encoding="utf-8")
+    bundle_info = bundled.metadata.get("web", {}).get("source_bundle", {})
+    console.print(
+        "[green]Web bundle written[/green] "
+        f"{output} ({bundle_info.get('embedded_files', 0)} source files embedded)"
     )
 
 
