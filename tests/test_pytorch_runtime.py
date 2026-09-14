@@ -28,6 +28,13 @@ class SharedModel(torch.nn.Module):
         return self.right(self.left(x))
 
 
+class InplaceModel(torch.nn.Module):
+    def forward(self, x):
+        y = x.clone()
+        y.add_(1)
+        return y
+
+
 def test_runtime_trace_preserves_shared_module_occurrences() -> None:
     torch.manual_seed(7)
     model = SharedModel()
@@ -40,6 +47,7 @@ def test_runtime_trace_preserves_shared_module_occurrences() -> None:
     assert torch.allclose(result.output, expected)
     assert graph.runs[0].id == "run.shared"
     assert graph.metadata["runtime_backend"] == "pytorch_module_hooks"
+    assert graph.metadata["operator_dispatch"] is True
 
     definitions = {
         node.id: node
@@ -72,6 +80,101 @@ def test_runtime_trace_preserves_shared_module_occurrences() -> None:
     assert any(edge.kind == EdgeKind.CONSUMES for edge in graph.edges)
     assert any(edge.kind == EdgeKind.PRODUCES for edge in graph.edges)
     assert any(edge.kind == EdgeKind.CONTAINS for edge in graph.edges)
+
+
+def test_operator_dispatch_records_aten_occurrences_and_parameter_flow() -> None:
+    model = SharedModel()
+    result = trace_model(model, (torch.ones(2, 4),), run_id="run.ops")
+    graph = result.ir
+
+    op_definitions = [
+        node
+        for node in graph.nodes
+        if node.identity_kind == IdentityKind.DEFINITION
+        and node.role == "pytorch_operator_definition"
+    ]
+    op_occurrences = [
+        node
+        for node in graph.nodes
+        if node.identity_kind == IdentityKind.OCCURRENCE
+        and node.role == "pytorch_operator_call"
+    ]
+    assert op_definitions
+    assert op_occurrences
+    assert all(node.run_id == "run.ops" for node in op_occurrences)
+    assert any("relu" in node.label for node in op_definitions)
+
+    occurrences_by_definition: dict[str, list[int | None]] = {}
+    for node in op_occurrences:
+        assert node.definition_id is not None
+        occurrences_by_definition.setdefault(node.definition_id, []).append(
+            node.occurrence_index
+        )
+    assert any(indices == [0, 1] for indices in occurrences_by_definition.values())
+
+    state_nodes = [
+        node for node in graph.nodes if node.identity_kind == IdentityKind.STATE
+    ]
+    weight = next(
+        node
+        for node in state_nodes
+        if node.role == "pytorch_parameter" and node.label.endswith("linear.weight")
+    )
+    assert weight.tensor is not None
+    assert weight.tensor.shape == [4, 4]
+    assert weight.attributes["aliases"] == [
+        "model.left.linear.weight",
+        "model.right.linear.weight",
+    ]
+
+    op_ids = {node.id for node in op_occurrences}
+    assert any(
+        edge.kind == EdgeKind.CONSUMES
+        and edge.source == weight.id
+        and edge.target in op_ids
+        for edge in graph.edges
+    )
+
+
+def test_inplace_operator_creates_a_new_value_version() -> None:
+    model = InplaceModel()
+    result = trace_model(model, (torch.zeros(2, 3),), run_id="run.inplace")
+    graph = result.ir
+
+    op_definitions = {
+        node.id: node
+        for node in graph.nodes
+        if node.identity_kind == IdentityKind.DEFINITION
+        and node.role == "pytorch_operator_definition"
+    }
+    add_call = next(
+        node
+        for node in graph.nodes
+        if node.identity_kind == IdentityKind.OCCURRENCE
+        and node.role == "pytorch_operator_call"
+        and node.definition_id is not None
+        and "add_" in op_definitions[node.definition_id].label
+    )
+
+    consumed = {
+        edge.source
+        for edge in graph.edges
+        if edge.kind == EdgeKind.CONSUMES and edge.target == add_call.id
+    }
+    produced = {
+        edge.target
+        for edge in graph.edges
+        if edge.kind == EdgeKind.PRODUCES and edge.source == add_call.id
+    }
+    assert consumed
+    assert produced
+    assert consumed.isdisjoint(produced)
+    assert any(
+        edge.kind == EdgeKind.DERIVED_FROM
+        and edge.source in consumed
+        and edge.target in produced
+        for edge in graph.edges
+    )
 
 
 def test_runtime_trace_records_source_and_framework_metadata() -> None:

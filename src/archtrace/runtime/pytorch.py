@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import importlib
+from contextlib import nullcontext
 from dataclasses import dataclass
 from typing import Any
 
 from archtrace.ir import ArchTraceIR
 from archtrace.runtime._pytorch_capture import PyTorchModuleCapture
+from archtrace.runtime._pytorch_dispatch import make_dispatch_mode
 
 
 @dataclass(slots=True)
@@ -25,12 +27,14 @@ def trace_model(
     *,
     run_id: str = "run.0",
     project_name: str | None = None,
+    capture_operators: bool = True,
 ) -> PyTorchTraceResult:
-    """Execute a ``torch.nn.Module`` once and capture module/tensor runtime flow.
+    """Execute a ``torch.nn.Module`` once and capture runtime flow into ATIR.
 
-    M1 initially captures module definitions, concrete call occurrences, nesting,
-    tensor inputs/outputs, and source provenance. Operator-dispatch and FX/export
-    evidence will enrich the same ATIR identities rather than form separate graphs.
+    Module hooks recover hierarchy and repeated/shared module calls. By default,
+    a ``TorchDispatchMode`` additionally records concrete ``aten.*`` operator
+    occurrences, state/tensor dependencies, outputs, and basic in-place value
+    versioning. Both layers normalize into one ATIR graph.
     """
 
     torch = _require_torch()
@@ -43,13 +47,20 @@ def trace_model(
         run_id=run_id,
         project_name=project_name or type(model).__name__,
     )
+    dispatch_context = (
+        make_dispatch_mode(capture, torch) if capture_operators else nullcontext()
+    )
+
     capture.install()
     try:
-        output = model(*args, **({} if kwargs is None else dict(kwargs)))
+        with dispatch_context:
+            output = model(*args, **({} if kwargs is None else dict(kwargs)))
     finally:
         capture.remove()
 
-    return PyTorchTraceResult(ir=capture.finish(), output=output)
+    graph = capture.finish()
+    graph.metadata["operator_dispatch"] = capture_operators
+    return PyTorchTraceResult(ir=graph, output=output)
 
 
 def _require_torch() -> Any:
