@@ -10,6 +10,7 @@ from typing import Any
 from archtrace.ir import ArchTraceIR
 from archtrace.runtime._pytorch_capture import PyTorchModuleCapture
 from archtrace.runtime._pytorch_dispatch import make_dispatch_mode
+from archtrace.runtime._pytorch_structured import capture_structured_graphs
 
 
 @dataclass(slots=True)
@@ -28,19 +29,22 @@ def trace_model(
     run_id: str = "run.0",
     project_name: str | None = None,
     capture_operators: bool = True,
+    capture_fx: bool = True,
+    capture_export: bool = True,
 ) -> PyTorchTraceResult:
-    """Execute a ``torch.nn.Module`` once and capture runtime flow into ATIR.
+    """Execute a ``torch.nn.Module`` once and capture multiple evidence layers.
 
-    Module hooks recover hierarchy and repeated/shared module calls. By default,
-    a ``TorchDispatchMode`` additionally records concrete ``aten.*`` operator
-    occurrences, state/tensor dependencies, outputs, and basic in-place value
-    versioning. Both layers normalize into one ATIR graph.
+    Runtime hooks recover module hierarchy and concrete call occurrences;
+    ``TorchDispatchMode`` records concrete ``aten.*`` operations and tensor/state
+    flow. FX and ``torch.export`` are then attempted as non-fatal independent
+    structural evidence sources and aligned back to runtime definitions.
     """
 
     torch = _require_torch()
     if not isinstance(model, torch.nn.Module):
         raise TypeError("trace_model expects an instance of torch.nn.Module")
 
+    actual_kwargs = {} if kwargs is None else dict(kwargs)
     capture = PyTorchModuleCapture(
         model,
         torch=torch,
@@ -54,12 +58,26 @@ def trace_model(
     capture.install()
     try:
         with dispatch_context:
-            output = model(*args, **({} if kwargs is None else dict(kwargs)))
+            output = model(*args, **actual_kwargs)
     finally:
         capture.remove()
 
+    structured_reports = capture_structured_graphs(
+        capture,
+        model,
+        args,
+        actual_kwargs,
+        torch=torch,
+        capture_fx=capture_fx,
+        capture_export=capture_export,
+    )
+
     graph = capture.finish()
     graph.metadata["operator_dispatch"] = capture_operators
+    graph.metadata["structured_captures"] = [
+        report.to_dict() for report in structured_reports
+    ]
+    graph = ArchTraceIR.model_validate(graph.model_dump())
     return PyTorchTraceResult(ir=graph, output=output)
 
 

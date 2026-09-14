@@ -41,7 +41,13 @@ def test_runtime_trace_preserves_shared_module_occurrences() -> None:
     x = torch.randn(2, 4)
     expected = model(x)
 
-    result = trace_model(model, (x,), run_id="run.shared")
+    result = trace_model(
+        model,
+        (x,),
+        run_id="run.shared",
+        capture_fx=False,
+        capture_export=False,
+    )
     graph = result.ir
 
     assert torch.allclose(result.output, expected)
@@ -68,8 +74,16 @@ def test_runtime_trace_preserves_shared_module_occurrences() -> None:
     assert [node.occurrence_index for node in shared_calls] == [0, 1]
     assert all(node.run_id == "run.shared" for node in shared_calls)
 
-    input_nodes = [node for node in graph.nodes if node.kind == NodeKind.INPUT]
-    output_nodes = [node for node in graph.nodes if node.kind == NodeKind.OUTPUT]
+    input_nodes = [
+        node
+        for node in graph.nodes
+        if node.kind == NodeKind.INPUT and node.identity_kind == IdentityKind.VALUE
+    ]
+    output_nodes = [
+        node
+        for node in graph.nodes
+        if node.kind == NodeKind.OUTPUT and node.identity_kind == IdentityKind.VALUE
+    ]
     assert len(input_nodes) == 1
     assert len(output_nodes) == 1
     assert input_nodes[0].tensor is not None
@@ -84,7 +98,13 @@ def test_runtime_trace_preserves_shared_module_occurrences() -> None:
 
 def test_operator_dispatch_records_aten_occurrences_and_parameter_flow() -> None:
     model = SharedModel()
-    result = trace_model(model, (torch.ones(2, 4),), run_id="run.ops")
+    result = trace_model(
+        model,
+        (torch.ones(2, 4),),
+        run_id="run.ops",
+        capture_fx=False,
+        capture_export=False,
+    )
     graph = result.ir
 
     op_definitions = [
@@ -138,7 +158,13 @@ def test_operator_dispatch_records_aten_occurrences_and_parameter_flow() -> None
 
 def test_inplace_operator_creates_a_new_value_version() -> None:
     model = InplaceModel()
-    result = trace_model(model, (torch.zeros(2, 3),), run_id="run.inplace")
+    result = trace_model(
+        model,
+        (torch.zeros(2, 3),),
+        run_id="run.inplace",
+        capture_fx=False,
+        capture_export=False,
+    )
     graph = result.ir
 
     op_definitions = {
@@ -179,7 +205,12 @@ def test_inplace_operator_creates_a_new_value_version() -> None:
 
 def test_runtime_trace_records_source_and_framework_metadata() -> None:
     model = SharedModel()
-    result = trace_model(model, (torch.ones(1, 4),))
+    result = trace_model(
+        model,
+        (torch.ones(1, 4),),
+        capture_fx=False,
+        capture_export=False,
+    )
     graph = result.ir
 
     assert graph.runs[0].framework == "pytorch"
