@@ -159,25 +159,28 @@ def repository_index_to_atir(index: RepositoryIndex) -> ArchTraceIR:
                 [evidence_id],
             )
 
-    for link in index.dataflow:
-        if link.producer_call_id not in call_ids or link.consumer_call_id not in call_ids:
+    for intra_link in index.dataflow:
+        if (
+            intra_link.producer_call_id not in call_ids
+            or intra_link.consumer_call_id not in call_ids
+        ):
             continue
         evidence_ids = [
-            call_evidence[link.producer_call_id],
-            call_evidence[link.consumer_call_id],
+            call_evidence[intra_link.producer_call_id],
+            call_evidence[intra_link.consumer_call_id],
         ]
         add_edge(
-            link.producer_call_id,
-            link.consumer_call_id,
+            intra_link.producer_call_id,
+            intra_link.consumer_call_id,
             EdgeKind.DATA,
             evidence_ids,
-            label=link.variable,
+            label=intra_link.variable,
             attributes={"flow_kind": "intraprocedural"},
         )
 
-    for link in analyze_interprocedural_flow(index):
-        producer = calls_by_id.get(link.producer_call_id)
-        consumer = calls_by_id.get(link.consumer_call_id)
+    for boundary_link in analyze_interprocedural_flow(index):
+        producer = calls_by_id.get(boundary_link.producer_call_id)
+        consumer = calls_by_id.get(boundary_link.consumer_call_id)
         if producer is None or consumer is None:
             continue
         evidence_id = add_evidence(
@@ -187,7 +190,7 @@ def repository_index_to_atir(index: RepositoryIndex) -> ArchTraceIR:
             metadata={
                 "producer_call_id": producer.id,
                 "consumer_call_id": consumer.id,
-                "flow_kind": link.kind.value,
+                "flow_kind": boundary_link.kind.value,
             },
         )
         add_edge(
@@ -195,10 +198,10 @@ def repository_index_to_atir(index: RepositoryIndex) -> ArchTraceIR:
             consumer.id,
             EdgeKind.DATA,
             [evidence_id],
-            label=link.variable,
+            label=boundary_link.variable,
             attributes={
-                "flow_kind": link.kind.value,
-                **link.metadata,
+                "flow_kind": boundary_link.kind.value,
+                **boundary_link.metadata,
             },
         )
 
