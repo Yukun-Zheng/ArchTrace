@@ -243,11 +243,15 @@ def _merge_project(static: ProjectInfo, runtime: ProjectInfo) -> ProjectInfo:
     )
 
 
+def _record_id(record: BaseModel) -> str:
+    return str(record.model_dump(mode="python")["id"])
+
+
 def _merge(left: list[_ModelT], right: list[_ModelT]) -> list[_ModelT]:
     result = list(left)
-    by_id = {str(getattr(item, "id")): item for item in left}
+    by_id = {_record_id(item): item for item in left}
     for item in right:
-        item_id = str(getattr(item, "id"))
+        item_id = _record_id(item)
         existing = by_id.get(item_id)
         if existing is None:
             result.append(item)
@@ -278,12 +282,12 @@ def _records(graph: ArchTraceIR) -> dict[str, tuple[str, dict[str, Any]]]:
     ]
     for category, records in groups:
         for record in records:
-            result[str(record.id)] = (category, record.model_dump(mode="json"))
+            result[_record_id(record)] = (category, record.model_dump(mode="json"))
     return result
 
 
 def _all_ids(*groups: list[Any]) -> set[str]:
-    return {str(record.id) for group in groups for record in group}
+    return {_record_id(record) for group in groups for record in group}
 
 
 def _next_id(prefix: str, used: set[str]) -> str:
