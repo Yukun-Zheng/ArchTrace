@@ -15,7 +15,7 @@ from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-CURRENT_SCHEMA_VERSION = "0.2"
+CURRENT_SCHEMA_VERSION: Literal["0.2"] = "0.2"
 
 
 class NodeLevel(StrEnum):
