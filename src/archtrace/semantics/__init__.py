@@ -1,5 +1,11 @@
 """Evidence-grounded semantic architecture recovery."""
 
+from archtrace.semantics.claims import (
+    AuthorDeclaration,
+    ClaimCheckStatus,
+    add_author_claims,
+    extract_author_declarations,
+)
 from archtrace.semantics.context import ContextSnippet, collect_repository_context
 from archtrace.semantics.engine import (
     SemanticHypothesis,
@@ -19,9 +25,12 @@ from archtrace.semantics.projection import (
     PaperView,
     PaperViewPolicy,
     project_paper_view,
+    select_semantic_components,
 )
 
 __all__ = [
+    "AuthorDeclaration",
+    "ClaimCheckStatus",
     "ContextSnippet",
     "Modality",
     "PaperEdge",
@@ -33,8 +42,11 @@ __all__ = [
     "SemanticOverride",
     "SemanticPhase",
     "SemanticRole",
+    "add_author_claims",
     "collect_repository_context",
+    "extract_author_declarations",
     "project_paper_view",
     "recover_semantics",
     "role_spec",
+    "select_semantic_components",
 ]
