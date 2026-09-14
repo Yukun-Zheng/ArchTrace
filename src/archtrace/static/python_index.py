@@ -203,7 +203,10 @@ class _FileAnalyzer(ast.NodeVisitor):
         module_span = SourceSpan(
             path=self.index.path,
             start_line=1,
-            end_line=max((getattr(node, "end_lineno", 1) or 1 for node in self.tree.body), default=1),
+            end_line=max(
+                (getattr(node, "end_lineno", 1) or 1 for node in self.tree.body),
+                default=1,
+            ),
             symbol=self.index.module,
         )
         module_symbol = PythonSymbol(
@@ -502,7 +505,13 @@ def _build_dataflow(calls: list[CallSite]) -> list[DataFlowLink]:
 
     links: list[DataFlowLink] = []
     for scope_calls in grouped.values():
-        scope_calls.sort(key=lambda item: (item.span.start_line, item.span.start_column or 0, item.order))
+        scope_calls.sort(
+            key=lambda item: (
+                item.span.start_line,
+                item.span.start_column or 0,
+                item.order,
+            )
+        )
         last_producer: dict[str, str] = {}
         for call in scope_calls:
             for name in call.argument_names:
@@ -602,7 +611,11 @@ def _scan_yaml(path: str, source: str) -> list[ConfigEntry]:
                     path=path,
                     key=full_key,
                     value=_parse_yaml_scalar(raw_value),
-                    span=SourceSpan(path=path, start_line=line_number, end_line=line_number),
+                    span=SourceSpan(
+                        path=path,
+                        start_line=line_number,
+                        end_line=line_number,
+                    ),
                 )
             )
         else:
