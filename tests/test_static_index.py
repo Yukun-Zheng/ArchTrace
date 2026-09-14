@@ -63,11 +63,18 @@ optimizer:
     )
 
 
-def test_repository_index_resolves_local_calls_and_keeps_dynamic_calls(tmp_path: Path) -> None:
+def test_repository_index_resolves_local_calls_and_keeps_dynamic_calls(
+    tmp_path: Path,
+) -> None:
     _write_fixture(tmp_path)
     index = index_repository(tmp_path)
 
-    calls = {call.callee_text: call for call in index.calls if call.callee_text in {"preprocess", "model", "loss_fn"}}
+    tracked = {"preprocess", "model", "loss_fn"}
+    calls = {
+        call.callee_text: call
+        for call in index.calls
+        if call.callee_text in tracked
+    }
     assert calls["preprocess"].resolution == CallResolution.LOCAL
     assert calls["preprocess"].resolved_symbol_id is not None
     assert calls["loss_fn"].resolution == CallResolution.LOCAL
@@ -83,7 +90,9 @@ def test_repository_index_resolves_local_calls_and_keeps_dynamic_calls(tmp_path:
     assert (calls["model"].id, calls["loss_fn"].id, "y") in links
 
 
-def test_repository_index_discovers_configs_and_explains_entrypoint_score(tmp_path: Path) -> None:
+def test_repository_index_discovers_configs_and_explains_entrypoint_score(
+    tmp_path: Path,
+) -> None:
     _write_fixture(tmp_path)
     index = index_repository(tmp_path)
 
@@ -102,7 +111,9 @@ def test_repository_index_discovers_configs_and_explains_entrypoint_score(tmp_pa
     assert any("entrypoint filename" in reason for reason in candidate.reasons)
 
 
-def test_static_index_normalizes_into_valid_atir_with_call_and_data_edges(tmp_path: Path) -> None:
+def test_static_index_normalizes_into_valid_atir_with_call_and_data_edges(
+    tmp_path: Path,
+) -> None:
     _write_fixture(tmp_path)
     index = index_repository(tmp_path)
     graph = repository_index_to_atir(index)
@@ -110,7 +121,10 @@ def test_static_index_normalizes_into_valid_atir_with_call_and_data_edges(tmp_pa
     call_nodes = [node for node in graph.nodes if node.role == "python_call_site"]
     assert call_nodes
     assert any(node.label == "preprocess" for node in call_nodes)
-    assert any(node.label == "model" and node.attributes["resolution"] == "dynamic" for node in call_nodes)
+    assert any(
+        node.label == "model" and node.attributes["resolution"] == "dynamic"
+        for node in call_nodes
+    )
 
     assert any(edge.kind == EdgeKind.CALLS for edge in graph.edges)
     data_edges = [edge for edge in graph.edges if edge.kind == EdgeKind.DATA]
