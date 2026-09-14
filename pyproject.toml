@@ -1,0 +1,49 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "archtrace"
+version = "0.1.0.dev0"
+description = "Source-grounded architecture reconstruction and tracing for research code."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Yukun Zheng" }]
+dependencies = [
+  "pydantic>=2.9,<3",
+  "typer>=0.12,<1",
+  "rich>=13.9,<15",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8,<9",
+  "ruff>=0.6",
+  "mypy>=1.11",
+]
+pytorch = [
+  "torch>=2.4",
+]
+
+[project.scripts]
+archtrace = "archtrace.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/archtrace"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+packages = ["archtrace"]
