@@ -5,18 +5,37 @@ from __future__ import annotations
 import inspect
 import re
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
 
 from archtrace.ir import SourceSpan, TensorSpec
 
 
 def named_modules(model: Any) -> Iterator[tuple[str, Any]]:
-    """Yield aliases too when the installed PyTorch supports it."""
+    """Yield module aliases too when the installed PyTorch supports it."""
 
     try:
         yield from model.named_modules(remove_duplicate=False)
     except TypeError:
         yield from model.named_modules()
+
+
+def named_parameters(model: Any) -> Iterator[tuple[str, Any]]:
+    """Yield parameter aliases too when supported."""
+
+    try:
+        yield from model.named_parameters(remove_duplicate=False)
+    except TypeError:
+        yield from model.named_parameters()
+
+
+def named_buffers(model: Any) -> Iterator[tuple[str, Any]]:
+    """Yield buffer aliases too when supported."""
+
+    try:
+        yield from model.named_buffers(remove_duplicate=False)
+    except TypeError:
+        yield from model.named_buffers()
 
 
 def iter_tensors(value: Any, torch: Any) -> Iterator[Any]:
@@ -63,6 +82,31 @@ def source_span(callable_obj: Any) -> SourceSpan | None:
         end_line=start_line + max(len(lines) - 1, 0),
         symbol=str(symbol) if symbol is not None else None,
     )
+
+
+def caller_source_span() -> SourceSpan | None:
+    """Locate the nearest meaningful Python call site for a dispatched operator."""
+
+    ignored_suffixes = {
+        "torch/_ops.py",
+        "torch/utils/_python_dispatch.py",
+        "torch/_library/simple_registry.py",
+    }
+    for frame in inspect.stack(context=0)[2:]:
+        raw_path = frame.filename.replace("\\", "/")
+        if "/archtrace/runtime/" in raw_path:
+            continue
+        if any(raw_path.endswith(suffix) for suffix in ignored_suffixes):
+            continue
+        if Path(raw_path).name in {"contextlib.py"}:
+            continue
+        return SourceSpan(
+            path=frame.filename,
+            start_line=frame.lineno,
+            end_line=frame.lineno,
+            symbol=frame.function,
+        )
+    return None
 
 
 def safe_fragment(value: str) -> str:
