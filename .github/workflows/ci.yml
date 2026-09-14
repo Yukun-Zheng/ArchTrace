@@ -36,3 +36,23 @@ jobs:
 
       - name: Pytest
         run: pytest
+
+  pytorch-runtime:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install ArchTrace
+        run: python -m pip install -e '.[dev]'
+
+      - name: Install CPU PyTorch
+        run: python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: PyTorch runtime tests
+        run: pytest tests/test_pytorch_runtime.py -q
