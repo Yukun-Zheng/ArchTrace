@@ -56,13 +56,9 @@ def test_runtime_trace_preserves_shared_module_occurrences() -> None:
     assert graph.metadata["operator_dispatch"] is True
 
     definitions = {
-        node.id: node
-        for node in graph.nodes
-        if node.identity_kind == IdentityKind.DEFINITION
+        node.id: node for node in graph.nodes if node.identity_kind == IdentityKind.DEFINITION
     }
-    shared_definition = next(
-        node for node in definitions.values() if node.label == "SharedBlock"
-    )
+    shared_definition = next(node for node in definitions.values() if node.label == "SharedBlock")
     assert shared_definition.attributes["aliases"] == ["model.left", "model.right"]
 
     shared_calls = [
@@ -116,8 +112,7 @@ def test_operator_dispatch_records_aten_occurrences_and_parameter_flow() -> None
     op_occurrences = [
         node
         for node in graph.nodes
-        if node.identity_kind == IdentityKind.OCCURRENCE
-        and node.role == "pytorch_operator_call"
+        if node.identity_kind == IdentityKind.OCCURRENCE and node.role == "pytorch_operator_call"
     ]
     assert op_definitions
     assert op_occurrences
@@ -127,14 +122,10 @@ def test_operator_dispatch_records_aten_occurrences_and_parameter_flow() -> None
     occurrences_by_definition: dict[str, list[int | None]] = {}
     for node in op_occurrences:
         assert node.definition_id is not None
-        occurrences_by_definition.setdefault(node.definition_id, []).append(
-            node.occurrence_index
-        )
+        occurrences_by_definition.setdefault(node.definition_id, []).append(node.occurrence_index)
     assert any(indices == [0, 1] for indices in occurrences_by_definition.values())
 
-    state_nodes = [
-        node for node in graph.nodes if node.identity_kind == IdentityKind.STATE
-    ]
+    state_nodes = [node for node in graph.nodes if node.identity_kind == IdentityKind.STATE]
     weight = next(
         node
         for node in state_nodes
@@ -149,9 +140,7 @@ def test_operator_dispatch_records_aten_occurrences_and_parameter_flow() -> None
 
     op_ids = {node.id for node in op_occurrences}
     assert any(
-        edge.kind == EdgeKind.CONSUMES
-        and edge.source == weight.id
-        and edge.target in op_ids
+        edge.kind == EdgeKind.CONSUMES and edge.source == weight.id and edge.target in op_ids
         for edge in graph.edges
     )
 
@@ -196,9 +185,7 @@ def test_inplace_operator_creates_a_new_value_version() -> None:
     assert produced
     assert consumed.isdisjoint(produced)
     assert any(
-        edge.kind == EdgeKind.DERIVED_FROM
-        and edge.source in consumed
-        and edge.target in produced
+        edge.kind == EdgeKind.DERIVED_FROM and edge.source in consumed and edge.target in produced
         for edge in graph.edges
     )
 

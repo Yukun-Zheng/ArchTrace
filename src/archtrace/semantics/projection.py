@@ -57,10 +57,7 @@ def select_semantic_components(
     for node in graph.nodes:
         if node.level != NodeLevel.SEMANTIC or node.role is None:
             continue
-        if (
-            not include_author_declarations
-            and node.attributes.get("declaration_only") is True
-        ):
+        if not include_author_declarations and node.attributes.get("declaration_only") is True:
             continue
         if _confidence(node.attributes.get("confidence")) < min_confidence:
             continue

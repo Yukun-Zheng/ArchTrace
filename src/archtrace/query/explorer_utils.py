@@ -43,12 +43,12 @@ def explorer_level(node: ArchNode) -> ExplorerLevel:
 
 def explorer_source(span: object) -> ExplorerSourceSpan:
     return ExplorerSourceSpan(
-        path=str(getattr(span, "path")),
-        start_line=int(getattr(span, "start_line")),
-        end_line=getattr(span, "end_line"),
-        start_column=getattr(span, "start_column"),
-        end_column=getattr(span, "end_column"),
-        symbol=getattr(span, "symbol"),
+        path=str(span.path),
+        start_line=int(span.start_line),
+        end_line=span.end_line,
+        start_column=span.start_column,
+        end_column=span.end_column,
+        symbol=span.symbol,
     )
 
 

@@ -290,10 +290,14 @@ class CoverageRecord(BaseModel):
         elif self.status == CoverageStatus.SOMETIMES_OBSERVED:
             if not observed or observed == considered:
                 raise ValueError("sometimes_observed requires a non-empty proper observed subset")
-        elif self.status in {
-            CoverageStatus.STATIC_REACHABLE_UNOBSERVED,
-            CoverageStatus.UNREACHABLE_UNDER_CONFIGURATION,
-        } and observed:
+        elif (
+            self.status
+            in {
+                CoverageStatus.STATIC_REACHABLE_UNOBSERVED,
+                CoverageStatus.UNREACHABLE_UNDER_CONFIGURATION,
+            }
+            and observed
+        ):
             raise ValueError(f"{self.status.value} requires no observed runs")
         return self
 
@@ -336,13 +340,7 @@ class ArchTraceIR(BaseModel):
 
         _require_unique(
             "record",
-            node_ids
-            + edge_ids
-            + evidence_ids
-            + run_ids
-            + claim_ids
-            + conflict_ids
-            + coverage_ids,
+            node_ids + edge_ids + evidence_ids + run_ids + claim_ids + conflict_ids + coverage_ids,
         )
 
         node_set = set(node_ids)

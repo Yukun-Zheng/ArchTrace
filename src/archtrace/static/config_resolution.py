@@ -43,11 +43,7 @@ def resolve_config_references(index: RepositoryIndex) -> list[ConfigReference]:
         for candidate in candidates:
             targets.extend(item.id for item in file_entries.get(candidate, []))
         targets = sorted(set(targets))
-        status = (
-            ConfigReferenceStatus.RESOLVED
-            if targets
-            else ConfigReferenceStatus.UNRESOLVED
-        )
+        status = ConfigReferenceStatus.RESOLVED if targets else ConfigReferenceStatus.UNRESOLVED
         references.append(
             ConfigReference(
                 source_entry_id=entry.id,
@@ -81,11 +77,7 @@ def _hydra_candidates(entry: ConfigEntry) -> list[str]:
         base = base / raw_path
 
     name = Path(raw_name)
-    names = (
-        [name]
-        if name.suffix
-        else [Path(f"{raw_name}.yaml"), Path(f"{raw_name}.yml")]
-    )
+    names = [name] if name.suffix else [Path(f"{raw_name}.yaml"), Path(f"{raw_name}.yml")]
     return sorted({_normalize_path((base / item).as_posix()) for item in names})
 
 

@@ -199,9 +199,7 @@ class ExplorerIndex:
             raise ValueError("invalid lineage bounds")
         level, entity_id = parse_key(key)
         origins = self._lineage_origins(level, entity_id, run_id)
-        queue: deque[tuple[str, int]] = deque(
-            (node_id, 0) for node_id in sorted(origins)
-        )
+        queue: deque[tuple[str, int]] = deque((node_id, 0) for node_id in sorted(origins))
         visited = set(origins)
         edge_ids: list[str] = []
         truncated = False
@@ -216,11 +214,7 @@ class ExplorerIndex:
                 else self._flow_in.get(current, [])
             )
             for edge in adjacency:
-                neighbor = (
-                    edge.target
-                    if direction == LineageDirection.DOWNSTREAM
-                    else edge.source
-                )
+                neighbor = edge.target if direction == LineageDirection.DOWNSTREAM else edge.source
                 neighbor_node = self.nodes.get(neighbor)
                 if neighbor_node is None or not self._visible(neighbor_node, run_id):
                     continue
@@ -284,12 +278,8 @@ class ExplorerIndex:
                 if source.level == NodeLevel.SEMANTIC:
                     self._add_semantic_member(edge.source, edge.target)
                 else:
-                    self._mechanical_children.setdefault(edge.source, set()).add(
-                        edge.target
-                    )
-                    self._mechanical_parents.setdefault(edge.target, set()).add(
-                        edge.source
-                    )
+                    self._mechanical_children.setdefault(edge.source, set()).add(edge.target)
+                    self._mechanical_parents.setdefault(edge.target, set()).add(edge.source)
             if edge.kind in _FLOW_EDGES:
                 self._flow_out.setdefault(edge.source, []).append(edge)
                 self._flow_in.setdefault(edge.target, []).append(edge)
@@ -366,9 +356,7 @@ class ExplorerIndex:
         )
 
     def _flow_neighbors(self, node_id: str) -> list[str]:
-        neighbors = {
-            edge.target for edge in self._flow_out.get(node_id, [])
-        } | {
+        neighbors = {edge.target for edge in self._flow_out.get(node_id, [])} | {
             edge.source for edge in self._flow_in.get(node_id, [])
         }
         return sorted(neighbors)
@@ -383,8 +371,7 @@ class ExplorerIndex:
             return {
                 member_id
                 for member_id in self._semantic_members.get(entity_id, set())
-                if member_id in self.nodes
-                and self._visible(self.nodes[member_id], run_id)
+                if member_id in self.nodes and self._visible(self.nodes[member_id], run_id)
             }
         node = self.nodes.get(entity_id)
         if node is None or not self._visible(node, run_id):
@@ -428,9 +415,7 @@ class ExplorerIndex:
             role=semantic.role,
             child_count=1,
             metadata={
-                "member_ids": sorted(
-                    self._semantic_members.get(semantic.id, set())
-                ),
+                "member_ids": sorted(self._semantic_members.get(semantic.id, set())),
                 "modalities": semantic.attributes.get("modalities", []),
                 "confidence": semantic.attributes.get("confidence"),
             },

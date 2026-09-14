@@ -53,11 +53,7 @@ def source_pane(
 
 def _semantic_member_ids(graph: ArchTraceIR, node: ArchNode) -> list[str]:
     raw = node.attributes.get("member_ids", [])
-    members = (
-        {item for item in raw if isinstance(item, str)}
-        if isinstance(raw, list)
-        else set()
-    )
+    members = {item for item in raw if isinstance(item, str)} if isinstance(raw, list) else set()
     for edge in graph.edges:
         if edge.source == node.id and edge.kind.value == "contains":
             members.add(edge.target)

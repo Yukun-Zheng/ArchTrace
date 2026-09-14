@@ -433,8 +433,7 @@ def _resolve_calls(
             full_symbols[f"{symbol.module}.{local_qualname}"] = symbol
 
     imports_by_module = {
-        file.module: {binding.local_name: binding for binding in file.imports}
-        for file in files
+        file.module: {binding.local_name: binding for binding in file.imports} for file in files
     }
 
     for call in calls:
@@ -471,9 +470,7 @@ def _resolve_callee_target(
             target = binding.imported_module
             if binding.imported_name is not None:
                 target = f"{target}.{binding.imported_name}"
-            return target, (
-                CallResolution.LOCAL if target in symbols else CallResolution.EXTERNAL
-            )
+            return target, (CallResolution.LOCAL if target in symbols else CallResolution.EXTERNAL)
         return None, CallResolution.DYNAMIC
 
     head, tail = callee.split(".", 1)
@@ -491,9 +488,7 @@ def _resolve_callee_target(
         if binding.imported_name is not None:
             base = f"{base}.{binding.imported_name}"
         target = f"{base}.{tail}"
-        return target, (
-            CallResolution.LOCAL if target in symbols else CallResolution.EXTERNAL
-        )
+        return target, (CallResolution.LOCAL if target in symbols else CallResolution.EXTERNAL)
 
     return None, CallResolution.DYNAMIC
 

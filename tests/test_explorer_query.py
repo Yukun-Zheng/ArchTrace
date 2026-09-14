@@ -259,9 +259,7 @@ def _fixture_graph() -> ArchTraceIR:
 
 def _semantic_id(graph: ArchTraceIR, role: str) -> str:
     return next(
-        node.id
-        for node in graph.nodes
-        if node.level == NodeLevel.SEMANTIC and node.role == role
+        node.id for node in graph.nodes if node.level == NodeLevel.SEMANTIC and node.role == role
     )
 
 

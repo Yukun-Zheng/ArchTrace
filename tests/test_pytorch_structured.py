@@ -107,8 +107,7 @@ def test_structured_backend_failure_does_not_break_runtime_trace(monkeypatch) ->
     assert reports["fx"]["error_type"] == "RuntimeError"
     assert "intentional fx failure" in reports["fx"]["error"]
     assert any(
-        node.identity_kind == IdentityKind.OCCURRENCE
-        and node.role == "pytorch_operator_call"
+        node.identity_kind == IdentityKind.OCCURRENCE and node.role == "pytorch_operator_call"
         for node in graph.nodes
     )
 
@@ -131,11 +130,7 @@ def test_attention_style_model_records_matmul_and_softmax() -> None:
         capture_fx=False,
         capture_export=False,
     )
-    labels = {
-        node.label
-        for node in result.ir.nodes
-        if node.role == "pytorch_operator_definition"
-    }
+    labels = {node.label for node in result.ir.nodes if node.role == "pytorch_operator_definition"}
     assert any("matmul" in label or "bmm" in label for label in labels)
     assert any("softmax" in label for label in labels)
     assert tuple(result.output.shape) == (2, 5, 8)
@@ -148,11 +143,7 @@ def test_data_dependent_branch_records_only_observed_branch() -> None:
         capture_fx=False,
         capture_export=False,
     )
-    labels = [
-        node.label
-        for node in result.ir.nodes
-        if node.role == "pytorch_operator_definition"
-    ]
+    labels = [node.label for node in result.ir.nodes if node.role == "pytorch_operator_definition"]
     assert torch.equal(result.output, torch.full((2, 2), 2.0))
     assert any("add" in label for label in labels)
     assert not any("sub" in label for label in labels)
@@ -165,11 +156,7 @@ def test_loop_keeps_three_concrete_operator_occurrences() -> None:
         capture_fx=False,
         capture_export=False,
     )
-    occurrences = [
-        node
-        for node in result.ir.nodes
-        if node.role == "pytorch_operator_call"
-    ]
+    occurrences = [node for node in result.ir.nodes if node.role == "pytorch_operator_call"]
     by_definition: dict[str, list[int | None]] = {}
     for node in occurrences:
         assert node.definition_id is not None

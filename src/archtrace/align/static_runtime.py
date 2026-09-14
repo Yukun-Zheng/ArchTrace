@@ -164,9 +164,7 @@ def _best_match(
     static_nodes: list[ArchNode],
 ) -> tuple[ArchNode, int] | None:
     candidates = [
-        (score, node)
-        for node in static_nodes
-        if (score := _match_score(runtime_node, node)) >= 8
+        (score, node) for node in static_nodes if (score := _match_score(runtime_node, node)) >= 8
     ]
     if not candidates:
         return None
