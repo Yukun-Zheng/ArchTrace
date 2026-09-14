@@ -11,19 +11,7 @@ import ast
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from archtrace.ir import (
-    ArchEdge,
-    ArchNode,
-    ArchTraceIR,
-    EdgeKind,
-    Evidence,
-    EvidenceKind,
-    FactStatus,
-    NodeKind,
-    NodeLevel,
-    ProjectInfo,
-    SourceSpan,
-)
+import archtrace.ir as atir
 
 
 IGNORED_PARTS = {
@@ -99,16 +87,16 @@ def scan_repository(root: str | Path) -> RepositorySummary:
     return RepositorySummary(root=root_path, python_files=summaries)
 
 
-def build_static_ir(summary: RepositorySummary) -> ArchTraceIR:
-    project = ProjectInfo(name=summary.root.name, root=str(summary.root))
-    nodes: list[ArchNode] = []
-    edges: list[ArchEdge] = []
-    evidence: list[Evidence] = []
+def build_static_ir(summary: RepositorySummary) -> atir.ArchTraceIR:
+    project = atir.ProjectInfo(name=summary.root.name, root=str(summary.root))
+    nodes: list[atir.ArchNode] = []
+    edges: list[atir.ArchEdge] = []
+    evidence: list[atir.Evidence] = []
 
-    repository_node = ArchNode(
+    repository_node = atir.ArchNode(
         id="repo.root",
-        level=NodeLevel.SEMANTIC,
-        kind=NodeKind.OTHER,
+        level=atir.NodeLevel.SEMANTIC,
+        kind=atir.NodeKind.OTHER,
         label=summary.root.name,
         role="repository",
     )
@@ -116,22 +104,22 @@ def build_static_ir(summary: RepositorySummary) -> ArchTraceIR:
 
     for file_index, file_summary in enumerate(summary.python_files):
         file_id = f"source.file.{file_index}"
-        file_span = SourceSpan(path=file_summary.path, start_line=1)
+        file_span = atir.SourceSpan(path=file_summary.path, start_line=1)
         evidence_id = f"evidence.static.file.{file_index}"
         evidence.append(
-            Evidence(
+            atir.Evidence(
                 id=evidence_id,
-                kind=EvidenceKind.STATIC,
-                status=FactStatus.OBSERVED,
+                kind=atir.EvidenceKind.STATIC,
+                status=atir.FactStatus.OBSERVED,
                 description="Python source discovered during repository scan.",
                 source=file_span,
             )
         )
         nodes.append(
-            ArchNode(
+            atir.ArchNode(
                 id=file_id,
-                level=NodeLevel.SOURCE,
-                kind=NodeKind.SOURCE,
+                level=atir.NodeLevel.SOURCE,
+                kind=atir.NodeKind.SOURCE,
                 label=file_summary.path,
                 parent_ids=[repository_node.id],
                 source=[file_span],
@@ -146,11 +134,11 @@ def build_static_ir(summary: RepositorySummary) -> ArchTraceIR:
             )
         )
         edges.append(
-            ArchEdge(
+            atir.ArchEdge(
                 id=f"edge.repo.file.{file_index}",
                 source=repository_node.id,
                 target=file_id,
-                kind=EdgeKind.CONTAINS,
+                kind=atir.EdgeKind.CONTAINS,
                 evidence_ids=[evidence_id],
             )
         )
@@ -159,20 +147,20 @@ def build_static_ir(summary: RepositorySummary) -> ArchTraceIR:
             class_id = f"module.{file_index}.{class_index}"
             class_evidence_id = f"evidence.static.module.{file_index}.{class_index}"
             evidence.append(
-                Evidence(
+                atir.Evidence(
                     id=class_evidence_id,
-                    kind=EvidenceKind.STATIC,
-                    status=FactStatus.INFERRED,
+                    kind=atir.EvidenceKind.STATIC,
+                    status=atir.FactStatus.INFERRED,
                     confidence=0.8,
                     description="Class name/base suggests a model/module definition.",
                     source=file_span,
                 )
             )
             nodes.append(
-                ArchNode(
+                atir.ArchNode(
                     id=class_id,
-                    level=NodeLevel.MODULE,
-                    kind=NodeKind.MODULE,
+                    level=atir.NodeLevel.MODULE,
+                    kind=atir.NodeKind.MODULE,
                     label=class_name,
                     parent_ids=[file_id],
                     source=[file_span],
@@ -180,16 +168,16 @@ def build_static_ir(summary: RepositorySummary) -> ArchTraceIR:
                 )
             )
             edges.append(
-                ArchEdge(
+                atir.ArchEdge(
                     id=f"edge.file.module.{file_index}.{class_index}",
                     source=file_id,
                     target=class_id,
-                    kind=EdgeKind.CONTAINS,
+                    kind=atir.EdgeKind.CONTAINS,
                     evidence_ids=[class_evidence_id],
                 )
             )
 
-    return ArchTraceIR(project=project, nodes=nodes, edges=edges, evidence=evidence)
+    return atir.ArchTraceIR(project=project, nodes=nodes, edges=edges, evidence=evidence)
 
 
 def _summarize_python_file(root: Path, path: Path) -> FileSummary:
