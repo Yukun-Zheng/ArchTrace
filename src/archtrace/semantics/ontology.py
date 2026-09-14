@@ -123,8 +123,6 @@ ROLE_SPECS: tuple[RoleSpec, ...] = (
             "multimodal_fusion",
             "cross_modal_fusion",
             "crossmodal_fusion",
-            "fusion",
-            "fuse",
             "cross_attention",
             "crossattention",
         ),
