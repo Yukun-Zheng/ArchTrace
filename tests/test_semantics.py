@@ -232,7 +232,12 @@ def test_semantic_recovery_does_not_fabricate_mechanical_data_edges() -> None:
     original_data = {edge.id for edge in source.edges if edge.kind == EdgeKind.DATA}
     recovered_data = {edge.id for edge in recovered.edges if edge.kind == EdgeKind.DATA}
     assert recovered_data == original_data
-    new_edges = [edge for edge in recovered.edges if edge.id not in {item.id for item in source.edges}]
+    original_edge_ids = {edge.id for edge in source.edges}
+    new_edges = [
+        edge
+        for edge in recovered.edges
+        if edge.id not in original_edge_ids
+    ]
     assert new_edges
     assert all(edge.kind == EdgeKind.CONTAINS for edge in new_edges)
 
