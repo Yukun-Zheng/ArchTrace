@@ -196,11 +196,7 @@ def _find_runtime_alignment(
     if graph_op not in {"call_function", "call_method"}:
         return None
 
-    candidates = [
-        node
-        for node in capture.nodes
-        if node.role == "pytorch_operator_definition"
-    ]
+    candidates = [node for node in capture.nodes if node.role == "pytorch_operator_definition"]
     for node in candidates:
         if node.label == target_text:
             return node.id

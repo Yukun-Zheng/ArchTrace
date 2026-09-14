@@ -46,9 +46,7 @@ def test_fine_grained_operator_lineage_connects_input_to_output() -> None:
         and nodes[node_id].role == "pytorch_operator_call"
         for node_id in path
     )
-    assert not any(
-        nodes[node_id].role == "pytorch_module_call" for node_id in path
-    )
+    assert not any(nodes[node_id].role == "pytorch_module_call" for node_id in path)
 
 
 def test_native_transformer_encoder_layer_traces_end_to_end() -> None:
@@ -74,8 +72,7 @@ def test_native_transformer_encoder_layer_traces_end_to_end() -> None:
     op_calls = [
         node
         for node in graph.nodes
-        if node.identity_kind == IdentityKind.OCCURRENCE
-        and node.role == "pytorch_operator_call"
+        if node.identity_kind == IdentityKind.OCCURRENCE and node.role == "pytorch_operator_call"
     ]
     assert len(op_calls) >= 10
 
@@ -87,9 +84,7 @@ def test_native_transformer_encoder_layer_traces_end_to_end() -> None:
     }
     assert any("softmax" in label for label in labels)
     assert any(
-        token in label
-        for label in labels
-        for token in ("mm", "addmm", "bmm", "scaled_dot_product")
+        token in label for label in labels for token in ("mm", "addmm", "bmm", "scaled_dot_product")
     )
 
     inputs = runtime_input_ids(graph)

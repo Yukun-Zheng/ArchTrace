@@ -94,18 +94,13 @@ def test_reconciliation_keeps_both_graphs_and_adds_source_alignment(
     alias = next(
         edge
         for edge in merged.edges
-        if edge.kind == EdgeKind.ALIAS
-        and edge.source == "runtime.module.tiny"
+        if edge.kind == EdgeKind.ALIAS and edge.source == "runtime.module.tiny"
     )
     assert alias.target == static_forward.id
     assert any(node.id == "runtime.call.tiny.0" for node in merged.nodes)
     assert any(node.id == static_forward.id for node in merged.nodes)
 
-    coverage = next(
-        record
-        for record in merged.coverage
-        if record.subject_id == static_forward.id
-    )
+    coverage = next(record for record in merged.coverage if record.subject_id == static_forward.id)
     assert coverage.status == CoverageStatus.ALWAYS_OBSERVED
     assert coverage.observed_run_ids == ["run.0"]
 
@@ -118,11 +113,7 @@ def test_reconciliation_marks_aligned_but_unobserved_definition(
     merged = reconcile_static_runtime(static, runtime)
 
     static_forward = next(node for node in static.nodes if node.label == "forward")
-    coverage = next(
-        record
-        for record in merged.coverage
-        if record.subject_id == static_forward.id
-    )
+    coverage = next(record for record in merged.coverage if record.subject_id == static_forward.id)
     assert coverage.status == CoverageStatus.STATIC_REACHABLE_UNOBSERVED
     assert coverage.observed_run_ids == []
 

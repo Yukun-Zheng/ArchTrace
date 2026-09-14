@@ -51,9 +51,7 @@ def trace_model(
         run_id=run_id,
         project_name=project_name or type(model).__name__,
     )
-    dispatch_context = (
-        make_dispatch_mode(capture, torch) if capture_operators else nullcontext()
-    )
+    dispatch_context = make_dispatch_mode(capture, torch) if capture_operators else nullcontext()
 
     capture.install()
     try:
@@ -74,9 +72,7 @@ def trace_model(
 
     graph = capture.finish()
     graph.metadata["operator_dispatch"] = capture_operators
-    graph.metadata["structured_captures"] = [
-        report.to_dict() for report in structured_reports
-    ]
+    graph.metadata["structured_captures"] = [report.to_dict() for report in structured_reports]
     graph = ArchTraceIR.model_validate(graph.model_dump())
     return PyTorchTraceResult(ir=graph, output=output)
 

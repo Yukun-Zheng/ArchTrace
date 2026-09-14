@@ -79,9 +79,7 @@ def _graph(
 
 def _semantic_by_role(graph: ArchTraceIR, role: SemanticRole) -> ArchNode:
     return next(
-        node
-        for node in graph.nodes
-        if node.level == NodeLevel.SEMANTIC and node.role == role.value
+        node for node in graph.nodes if node.level == NodeLevel.SEMANTIC and node.role == role.value
     )
 
 
@@ -233,11 +231,7 @@ def test_semantic_recovery_does_not_fabricate_mechanical_data_edges() -> None:
     recovered_data = {edge.id for edge in recovered.edges if edge.kind == EdgeKind.DATA}
     assert recovered_data == original_data
     original_edge_ids = {edge.id for edge in source.edges}
-    new_edges = [
-        edge
-        for edge in recovered.edges
-        if edge.id not in original_edge_ids
-    ]
+    new_edges = [edge for edge in recovered.edges if edge.id not in original_edge_ids]
     assert new_edges
     assert all(edge.kind == EdgeKind.CONTAINS for edge in new_edges)
 

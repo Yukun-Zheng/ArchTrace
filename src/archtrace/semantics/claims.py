@@ -82,10 +82,7 @@ _ROLE_PATTERNS: tuple[tuple[SemanticRole, str], ...] = (
         r"\bpolicy(?:[\s_-]*(?:network|model))?\b|策略网络",
     ),
 )
-_PATTERNS = tuple(
-    (role, re.compile(pattern, re.IGNORECASE))
-    for role, pattern in _ROLE_PATTERNS
-)
+_PATTERNS = tuple((role, re.compile(pattern, re.IGNORECASE)) for role, pattern in _ROLE_PATTERNS)
 _FROZEN = re.compile(
     r"\b(?:frozen|freeze|freezes|fixed[\s_-]*weights?)\b|冻结|固定参数",
     re.IGNORECASE,
@@ -145,9 +142,7 @@ def add_author_claims(
 
     result.metadata["author_claims"] = {
         "backend": "deterministic_document_claims_v0",
-        "claim_count": sum(
-            claim.id.startswith("claim.author.") for claim in result.claims
-        ),
+        "claim_count": sum(claim.id.startswith("claim.author.") for claim in result.claims),
         "conflict_count": sum(
             conflict.kind == ConflictKind.AUTHOR_IMPLEMENTATION_MISMATCH
             for conflict in result.conflicts
@@ -403,9 +398,7 @@ def _frozen_from_mechanics(
     if not votes or len({value for value, _ in votes}) != 1:
         return None
     evidence_ids = sorted(
-        evidence_id
-        for _, vote_evidence in votes
-        for evidence_id in vote_evidence
+        evidence_id for _, vote_evidence in votes for evidence_id in vote_evidence
     )
     return votes[0][0], sorted(set(evidence_ids))
 
@@ -448,11 +441,7 @@ def _related(graph: ArchTraceIR, semantic: ArchNode) -> list[ArchNode]:
 
 def _support(node: ArchNode) -> list[str]:
     raw = node.attributes.get("support_evidence_ids", [])
-    extra = (
-        [item for item in raw if isinstance(item, str)]
-        if isinstance(raw, list)
-        else []
-    )
+    extra = [item for item in raw if isinstance(item, str)] if isinstance(raw, list) else []
     return sorted(set([*node.evidence_ids, *extra]))
 
 

@@ -220,9 +220,7 @@ def test_author_component_claim_is_supported_by_recovered_fusion() -> None:
 
 
 def test_unverified_author_component_becomes_declaration_only_and_not_paper_fact() -> None:
-    semantic = recover_semantics(
-        _role_graph([("vision", "VisionEncoder", NodeKind.MODULE)])
-    )
+    semantic = recover_semantics(_role_graph([("vision", "VisionEncoder", NodeKind.MODULE)]))
     checked = add_author_claims(
         semantic,
         [
@@ -239,9 +237,7 @@ def test_unverified_author_component_becomes_declaration_only_and_not_paper_fact
         if claim.id.startswith("claim.author")
         and claim.metadata["semantic_role"] == SemanticRole.PLANNER.value
     )
-    declaration = next(
-        node for node in checked.nodes if node.id == planner_claim.subject_id
-    )
+    declaration = next(node for node in checked.nodes if node.id == planner_claim.subject_id)
     assert declaration.attributes["declaration_only"] is True
     assert planner_claim.metadata["implementation_check"] == "unresolved"
     assert not checked.conflicts
@@ -251,9 +247,7 @@ def test_unverified_author_component_becomes_declaration_only_and_not_paper_fact
 
 
 def test_negative_author_component_claim_conflicts_with_recovered_component() -> None:
-    semantic = recover_semantics(
-        _role_graph([("planner", "TrajectoryPlanner", NodeKind.MODULE)])
-    )
+    semantic = recover_semantics(_role_graph([("planner", "TrajectoryPlanner", NodeKind.MODULE)]))
     checked = add_author_claims(
         semantic,
         [
@@ -267,8 +261,7 @@ def test_negative_author_component_claim_conflicts_with_recovered_component() ->
     author_claim = next(
         claim
         for claim in checked.claims
-        if claim.id.startswith("claim.author")
-        and claim.predicate == "component_present"
+        if claim.id.startswith("claim.author") and claim.predicate == "component_present"
     )
     assert author_claim.value is False
     assert author_claim.metadata["implementation_check"] == "contradicted"
@@ -308,12 +301,6 @@ def test_training_and_inference_semantic_views_share_both_phase_components() -> 
         policy=PaperViewPolicy(phases=(SemanticPhase.INFERENCE,)),
     )
     assert SemanticRole.LOSS.value in {node.role for node in training_paper.nodes}
-    assert SemanticRole.ACTION_HEAD.value not in {
-        node.role for node in training_paper.nodes
-    }
-    assert SemanticRole.ACTION_HEAD.value in {
-        node.role for node in inference_paper.nodes
-    }
-    assert SemanticRole.LOSS.value not in {
-        node.role for node in inference_paper.nodes
-    }
+    assert SemanticRole.ACTION_HEAD.value not in {node.role for node in training_paper.nodes}
+    assert SemanticRole.ACTION_HEAD.value in {node.role for node in inference_paper.nodes}
+    assert SemanticRole.LOSS.value not in {node.role for node in inference_paper.nodes}

@@ -79,22 +79,17 @@ def recover_semantics(
 
     result = graph.model_copy(deep=True)
     mechanical_nodes = [
-        node
-        for node in result.nodes
-        if node.level not in {NodeLevel.SEMANTIC, NodeLevel.PAPER}
+        node for node in result.nodes if node.level not in {NodeLevel.SEMANTIC, NodeLevel.PAPER}
     ]
     node_by_id = {node.id: node for node in result.nodes}
     modalities = _propagate_modalities(result, mechanical_nodes)
     hypotheses = {
-        node.id: _infer_node_hypotheses(node, result, modalities)
-        for node in mechanical_nodes
+        node.id: _infer_node_hypotheses(node, result, modalities) for node in mechanical_nodes
     }
 
     used_ids = _all_record_ids(result)
     overridden_ids = {
-        member_id
-        for override in overrides or []
-        for member_id in override.member_ids
+        member_id for override in overrides or [] for member_id in override.member_ids
     }
     grouped = _group_candidates(
         result,
@@ -118,9 +113,7 @@ def recover_semantics(
     for override in overrides or []:
         missing = sorted(set(override.member_ids) - node_by_id.keys())
         if missing:
-            raise ValueError(
-                "semantic override references unknown node(s): " + ", ".join(missing)
-            )
+            raise ValueError("semantic override references unknown node(s): " + ", ".join(missing))
         if not override.member_ids:
             raise ValueError("semantic override requires at least one member_id")
         spec = role_spec(override.role)
@@ -190,9 +183,7 @@ def _group_candidates(
         if node.id in overridden_ids or not hypotheses[node.id]:
             continue
         anchor_id = _nearest_module_anchor(node, node_by_id)
-        candidates_by_anchor.setdefault(anchor_id, []).append(
-            (node.id, hypotheses[node.id][0])
-        )
+        candidates_by_anchor.setdefault(anchor_id, []).append((node.id, hypotheses[node.id][0]))
 
     groups: list[tuple[str, SemanticHypothesis, list[str]]] = []
     for anchor_id in sorted(candidates_by_anchor):
@@ -231,10 +222,15 @@ def _infer_node_hypotheses(
         matched = [keyword for keyword in spec.keywords if _keyword_matches(text, keyword)]
         if not matched:
             continue
-        confidence = 0.58 if spec.role in {
-            SemanticRole.GENERIC_ENCODER,
-            SemanticRole.GENERIC_DECODER,
-        } else 0.88
+        confidence = (
+            0.58
+            if spec.role
+            in {
+                SemanticRole.GENERIC_ENCODER,
+                SemanticRole.GENERIC_DECODER,
+            }
+            else 0.88
+        )
         if spec.role == SemanticRole.MULTIMODAL_FUSION:
             confidence = 0.91
         reason = "name/source keyword: " + ", ".join(sorted(set(matched))[:3])
@@ -302,9 +298,7 @@ def _propagate_modalities(
     flow_edges = [
         edge
         for edge in graph.edges
-        if edge.kind in _FLOW_EDGE_KINDS
-        and edge.source in node_ids
-        and edge.target in node_ids
+        if edge.kind in _FLOW_EDGE_KINDS and edge.source in node_ids and edge.target in node_ids
     ]
 
     changed = True
@@ -357,13 +351,7 @@ def _append_semantic_group(
 ) -> None:
     node_by_id = {node.id: node for node in graph.nodes}
     members = [node_by_id[member_id] for member_id in member_ids]
-    support_ids = sorted(
-        {
-            evidence_id
-            for member in members
-            for evidence_id in member.evidence_ids
-        }
-    )
+    support_ids = sorted({evidence_id for member in members for evidence_id in member.evidence_ids})
     source = next((member.source[0] for member in members if member.source), None)
     spec = role_spec(hypothesis.role)
     label = (
@@ -417,9 +405,7 @@ def _append_semantic_group(
                 "alternatives": alternatives,
                 "phase": phase.value,
                 "inference_backend": (
-                    "user_override"
-                    if user_override is not None
-                    else "deterministic_rules_v0"
+                    "user_override" if user_override is not None else "deterministic_rules_v0"
                 ),
                 "support_evidence_ids": support_ids,
                 "machine_hypotheses": alternatives if user_override is not None else [],
@@ -531,11 +517,7 @@ def _node_text(node: ArchNode) -> str:
         if isinstance(value, (str, int, float, bool)):
             parts.extend((str(key), str(value)))
         elif isinstance(value, list):
-            parts.extend(
-                str(item)
-                for item in value
-                if isinstance(item, (str, int, float))
-            )
+            parts.extend(str(item) for item in value if isinstance(item, (str, int, float)))
     return _normalize_text(" ".join(parts))
 
 

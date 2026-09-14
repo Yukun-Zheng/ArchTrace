@@ -57,9 +57,7 @@ class PyTorchDispatchRecorder:
 
         local_index = self._definition_counts.get(definition_id, 0)
         self._definition_counts[definition_id] = local_index + 1
-        occurrence_id = (
-            f"op.{safe_fragment(self.capture.run.id)}.{self._occurrence_counter:07d}"
-        )
+        occurrence_id = f"op.{safe_fragment(self.capture.run.id)}.{self._occurrence_counter:07d}"
         self._occurrence_counter += 1
 
         evidence_id = self.capture.next_evidence_id("runtime.operator")
@@ -181,9 +179,7 @@ class PyTorchDispatchRecorder:
         if existing is not None:
             return existing
 
-        definition_id = (
-            f"op.def.{self._definition_counter:06d}.{safe_fragment(operator_name)}"
-        )
+        definition_id = f"op.def.{self._definition_counter:06d}.{safe_fragment(operator_name)}"
         self._definition_counter += 1
         evidence_ids: list[str] = []
         if span is not None:
@@ -207,9 +203,7 @@ class PyTorchDispatchRecorder:
                 identity_kind=IdentityKind.DEFINITION,
                 label=operator_name,
                 role="pytorch_operator_definition",
-                parent_ids=(
-                    [] if module_definition_id is None else [module_definition_id]
-                ),
+                parent_ids=([] if module_definition_id is None else [module_definition_id]),
                 source=[] if span is None else [span],
                 evidence_ids=evidence_ids,
                 attributes={"operator": operator_name},

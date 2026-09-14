@@ -75,11 +75,7 @@ def test_interprocedural_flow_crosses_argument_and_return_boundaries(
     links = analyze_interprocedural_flow(index)
 
     calls = {call.callee_text: call for call in index.calls}
-    normalize_calls = [
-        call
-        for call in index.calls
-        if call.callee_text == "normalize"
-    ]
+    normalize_calls = [call for call in index.calls if call.callee_text == "normalize"]
     preprocess_normalize = next(
         call
         for call in normalize_calls
@@ -116,9 +112,7 @@ def test_static_atir_contains_interprocedural_and_config_reference_edges(
     reads = [edge for edge in graph.edges if edge.kind == EdgeKind.READS]
     assert reads
     config_targets = {
-        node.id
-        for node in graph.nodes
-        if node.attributes.get("path") == "conf/train.yaml"
+        node.id for node in graph.nodes if node.attributes.get("path") == "conf/train.yaml"
     }
     assert config_targets
     assert any(edge.target in config_targets for edge in reads)
@@ -129,10 +123,7 @@ def test_static_atir_contains_interprocedural_and_config_reference_edges(
         if node.role in {"config_omegaconf_load", "config_hydra_entrypoint"}
     ]
     assert reference_nodes
-    assert all(
-        node.attributes["reference_status"] == "resolved"
-        for node in reference_nodes
-    )
+    assert all(node.attributes["reference_status"] == "resolved" for node in reference_nodes)
 
 
 def test_unresolved_config_reference_remains_explicit(tmp_path: Path) -> None:
@@ -149,22 +140,13 @@ def main():
     )
 
     graph = repository_index_to_atir(index_repository(tmp_path))
-    reference = next(
-        node
-        for node in graph.nodes
-        if node.role == "config_omegaconf_load"
-    )
+    reference = next(node for node in graph.nodes if node.role == "config_omegaconf_load")
     assert reference.attributes["reference_status"] == "unresolved"
     assert reference.attributes["target_entry_ids"] == []
     assert not any(
-        edge.kind == EdgeKind.READS and edge.source == reference.id
-        for edge in graph.edges
+        edge.kind == EdgeKind.READS and edge.source == reference.id for edge in graph.edges
     )
 
 
 def _caller_qualname(index: RepositoryIndex, symbol_id: str) -> str:
-    return next(
-        symbol.qualname
-        for symbol in index.symbols
-        if symbol.id == symbol_id
-    )
+    return next(symbol.qualname for symbol in index.symbols if symbol.id == symbol_id)

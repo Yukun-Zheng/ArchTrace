@@ -128,11 +128,7 @@ def repository_index_to_atir(index: RepositoryIndex) -> ArchTraceIR:
                 identity_kind=IdentityKind.DEFINITION,
                 label=call.callee_text,
                 role="python_call_site",
-                parent_ids=(
-                    [call.caller_symbol_id]
-                    if call.caller_symbol_id in symbol_ids
-                    else []
-                ),
+                parent_ids=([call.caller_symbol_id] if call.caller_symbol_id in symbol_ids else []),
                 source=[call.span],
                 evidence_ids=[evidence_id],
                 attributes={
@@ -283,9 +279,7 @@ def repository_index_to_atir(index: RepositoryIndex) -> ArchTraceIR:
             ],
             "config_references": config_references,
             "parse_errors": {
-                file.path: file.parse_error
-                for file in index.files
-                if file.parse_error is not None
+                file.path: file.parse_error for file in index.files if file.parse_error is not None
             },
         },
     )

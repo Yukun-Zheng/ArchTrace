@@ -373,9 +373,7 @@ class PyTorchModuleCapture:
                 )
             )
             if self._stack:
-                self.add_relation(
-                    self._stack[-1], call_id, EdgeKind.CONTAINS, [evidence_id]
-                )
+                self.add_relation(self._stack[-1], call_id, EdgeKind.CONTAINS, [evidence_id])
 
             is_root = "model" in definition.aliases
             for tensor in iter_tensors((args, kwargs), self.torch):

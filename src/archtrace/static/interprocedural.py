@@ -175,10 +175,7 @@ def _function_facts(
     symbol: PythonSymbol,
     node: ast.FunctionDef | ast.AsyncFunctionDef,
 ) -> _FunctionFacts:
-    parameters = [
-        argument.arg
-        for argument in [*node.args.posonlyargs, *node.args.args]
-    ]
+    parameters = [argument.arg for argument in [*node.args.posonlyargs, *node.args.args]]
     if node.args.vararg is not None:
         parameters.append(node.args.vararg.arg)
     parameters.extend(argument.arg for argument in node.args.kwonlyargs)
@@ -241,9 +238,7 @@ def _latest_producer_before(
     line: int,
 ) -> CallSite | None:
     candidates = [
-        call
-        for call in calls
-        if variable in call.result_targets and call.span.start_line <= line
+        call for call in calls if variable in call.result_targets and call.span.start_line <= line
     ]
     if not candidates:
         return None

@@ -54,10 +54,7 @@ def find_runtime_operator_path(
         node.id
         for node in graph.nodes
         if node.identity_kind in {IdentityKind.VALUE, IdentityKind.STATE}
-        or (
-            node.identity_kind == IdentityKind.OCCURRENCE
-            and node.role == "pytorch_operator_call"
-        )
+        or (node.identity_kind == IdentityKind.OCCURRENCE and node.role == "pytorch_operator_call")
     }
     if source_id not in allowed or target_id not in allowed:
         return None
