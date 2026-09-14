@@ -266,6 +266,12 @@ ROLE_SPECS: tuple[RoleSpec, ...] = (
 )
 
 ROLE_BY_VALUE = {spec.role: spec for spec in ROLE_SPECS}
+_UNKNOWN_ROLE_SPEC = RoleSpec(
+    role=SemanticRole.UNKNOWN,
+    display_label="Unknown",
+    keywords=(),
+    priority=999,
+)
 
 
 MODALITY_KEYWORDS: dict[Modality, tuple[str, ...]] = {
@@ -282,5 +288,5 @@ MODALITY_KEYWORDS: dict[Modality, tuple[str, ...]] = {
 }
 
 
-def role_spec(role: SemanticRole) -> RoleSpec | None:
-    return ROLE_BY_VALUE.get(role)
+def role_spec(role: SemanticRole) -> RoleSpec:
+    return ROLE_BY_VALUE.get(role, _UNKNOWN_ROLE_SPEC)
