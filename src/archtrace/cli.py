@@ -11,6 +11,7 @@ from rich.console import Console
 from rich.table import Table
 
 from archtrace.ingest import build_static_ir, scan_repository
+from archtrace.ir import load_atir_json
 
 app = typer.Typer(
     name="archtrace",
@@ -88,11 +89,9 @@ def analyze(
 def validate(
     atir: Annotated[Path, typer.Argument(help="Path to an ATIR JSON document.")],
 ) -> None:
-    """Validate ATIR schema and graph references."""
-    from archtrace.ir import ArchTraceIR
-
-    ArchTraceIR.model_validate_json(atir.read_text(encoding="utf-8"))
-    console.print(f"[green]Valid ATIR:[/green] {atir}")
+    """Migrate supported historical schemas and validate ATIR references."""
+    graph = load_atir_json(atir.read_text(encoding="utf-8"))
+    console.print(f"[green]Valid ATIR {graph.schema_version}:[/green] {atir}")
 
 
 if __name__ == "__main__":

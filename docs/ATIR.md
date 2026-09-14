@@ -1,32 +1,89 @@
-# ATIR v0.1 — ArchTrace Intermediate Representation
+# ATIR v0.2 — ArchTrace Intermediate Representation
 
-ATIR is the canonical evidence graph of ArchTrace. It exists so that repository analysis, runtime tracing, semantic interpretation, interactive visualization, publication rendering, and model comparison operate on the **same underlying facts**.
+ATIR is the canonical evidence graph of ArchTrace. Repository analysis, runtime tracing, semantic interpretation, interactive visualization, publication rendering, and model comparison must all operate on this common representation rather than maintaining unrelated graphs.
 
-## 1. Non-negotiable invariants
+## 1. Core invariants
 
-1. **Every view is a projection of ATIR.** The paper view is not maintained separately from the runtime graph.
-2. **Mechanical facts and semantic interpretation are separate.** A `matmul` remains a `matmul` even if it is grouped into `Cross-Attention`.
-3. **Every non-trivial claim can carry evidence.** Evidence records where a fact came from and how certain it is.
-4. **A runtime trace is one observed execution, not the whole program.** Multiple runs may coexist.
-5. **Hierarchy is reversible.** High-level nodes point to the lower-level nodes they contain; users can always drill down.
-6. **Unknown is a valid value.** ArchTrace must not invent shape, semantics, control flow, or source provenance to make a graph look complete.
-7. **Human corrections are overlays with provenance.** They must not destroy the original automated evidence.
+1. **Every view is a projection of ATIR.** Paper, semantic, module, tensor/op, and source views are different projections of the same evidence graph.
+2. **Mechanics and interpretation remain separate.** A low-level operation never disappears merely because it is grouped into a semantic component.
+3. **Definition is not execution.** Reusable code/module/operator definitions are distinct from each concrete runtime occurrence.
+4. **Execution is not value.** A call/op occurrence is distinct from the tensors or other values it consumes and produces.
+5. **Runtime is evidence for one run, not proof of every possible path.** Multi-run coverage is explicit.
+6. **Claims carry provenance.** Author statements, static inference, runtime observation, semantic interpretation, and user correction can coexist.
+7. **Contradictions are preserved.** Conflicting claims are represented, not silently overwritten.
+8. **Unknown is valid.** ArchTrace must not fabricate missing mechanics to complete a diagram.
+9. **Hierarchy is reversible.** Any high-level component can be expanded back to underlying definitions, occurrences, values, and source spans.
+10. **Record IDs are globally unique within a document.** Cross-references therefore remain unambiguous.
 
-## 2. Evidence taxonomy
+## 2. Identity model
 
-ATIR distinguishes how a fact entered the graph:
+ATIR v0.2 introduces `IdentityKind`:
 
-| Evidence kind | Meaning | Typical source |
-|---|---|---|
-| `runtime` | directly observed during execution | hooks, operator dispatch, profiler, exported program |
-| `static` | inferred from program structure without executing it | AST, symbol table, data-flow, call graph |
-| `source` | literal identity/provenance in source | file, line, callable, config declaration |
-| `author` | explicitly stated by repository/paper authors | README, paper, comments, config names |
-| `semantic` | interpreted architectural meaning | deterministic rules or semantic model |
-| `user` | human correction/annotation | editor overlay |
-| `imported` | fact from an external graph format | ONNX, FX/export, external tracer |
+| identity | meaning |
+|---|---|
+| `group` | semantic/paper/repository aggregation |
+| `definition` | reusable module/function/operator definition |
+| `occurrence` | one concrete execution occurrence in one run |
+| `value` | runtime or symbolic value/tensor |
+| `state` | parameter, buffer, config, mutable state |
+| `source` | source-code artifact/span container |
 
-Every evidence record also has a fact status:
+The central distinction is:
+
+```text
+Definition                  Execution occurrence                 Value
+module.shared ────────────→ call.run0.0042 ───────────────────→ tensor.run0.0088
+      │                              │                                  │
+models/block.py:31          run=run.0, occurrence=3           [B, 256, 1024]
+```
+
+A shared block called ten times therefore remains **one definition plus ten occurrences**, not one misleading runtime node.
+
+Occurrence nodes may contain:
+
+```yaml
+identity_kind: occurrence
+definition_id: module.shared
+run_id: run.0
+occurrence_index: 3
+```
+
+`definition_id` is validated to point to a `definition` node.
+
+## 3. Architectural levels
+
+Identity and abstraction level are orthogonal.
+
+### L0 `paper`
+Communication-oriented architecture: major inputs, proposed mechanisms, outputs, and the relationships worth showing in a paper main figure.
+
+### L1 `semantic`
+Meaningful roles such as vision encoder, multimodal fusion, memory, world model, policy backbone, action head, loss, planner, controller, or environment.
+
+### L2 `module`
+Framework/module hierarchy, repeated blocks, shared parameters, and module-level I/O.
+
+### L3 `operation`
+Source-visible tensor-producing operations and runtime values. This is ArchTrace's intended mechanical atomic boundary.
+
+### L4 `source`
+Files, spans, symbols, call sites, configs, call stacks, and execution metadata.
+
+## 4. Evidence taxonomy
+
+Evidence records state **how a fact entered the graph**:
+
+| kind | meaning |
+|---|---|
+| `runtime` | directly observed during execution |
+| `static` | inferred from code without executing it |
+| `source` | literal source/config provenance |
+| `author` | declared by paper/repository authors |
+| `semantic` | architectural interpretation |
+| `user` | explicit human correction/annotation |
+| `imported` | imported from an external graph/tracer |
+
+Every evidence item also carries a fact status:
 
 - `observed`
 - `inferred`
@@ -34,48 +91,82 @@ Every evidence record also has a fact status:
 - `corrected`
 - `unknown`
 
-Confidence is numeric but **confidence does not turn inference into observation**.
+Confidence does not change epistemic type: a 0.99 inference is still not an observation.
 
-## 3. Abstraction levels
+## 5. Claims
 
-### L0 `paper`
+A `Claim` is a proposition about an ATIR entity:
 
-Minimal communicative architecture. This level is intentionally selective and optimized for explanation/publication.
-
-### L1 `semantic`
-
-Meaningful mechanisms and roles: encoders, fusion, memory, policy, dynamics model, planner, decoder, loss, controller, environment, etc.
-
-### L2 `module`
-
-Framework/module hierarchy and parameterized reusable components.
-
-### L3 `operation`
-
-Source-visible operations and tensors. The target atomic boundary is a source-visible tensor-producing transformation rather than a compiler/CUDA instruction.
-
-### L4 `source`
-
-Source files/spans, call sites, configuration definitions, runtime call stacks, and concrete run metadata.
-
-The hierarchy is not assumed to be a strict tree. Shared modules, tied parameters, reused functions, recurrent execution, and multi-role components require a graph.
-
-## 4. Node identity
-
-A stable node ID identifies an entity *within one ATIR document*. Runtime occurrences that execute the same source/module multiple times should be representable independently from the reusable definition.
-
-Planned identity split for v0.2:
-
-```text
-Definition       Execution occurrence       Value
-module.foo  ───→ call.run3.0042 ─────────→ tensor.run3.0088
+```yaml
+id: claim.vision.frozen.author
+subject_id: module.vision
+predicate: frozen
+value: true
+status: declared
+evidence_ids:
+  - evidence.readme.freeze
+confidence: 1.0
 ```
 
-This avoids collapsing loops and repeated/shared modules.
+A claim may point to another ATIR entity via `object_id` instead of a literal `value`. Exactly one is required.
 
-## 5. Tensor representation
+Scopes can bind a claim to particular runs or conditions:
 
-A tensor/value may carry:
+```yaml
+scope:
+  run_ids: [run.eval.0]
+  conditions:
+    config: configs/eval.yaml
+```
+
+This is essential because many architecture facts are configuration- or path-dependent.
+
+## 6. Conflicts
+
+Contradictions are first-class:
+
+```text
+README claim:  VisionEncoder.frozen = true
+runtime claim: VisionEncoder.frozen = false
+optimizer:     VisionEncoder parameters present
+```
+
+ATIR preserves the claims and creates a `Conflict` linking them. Conflict kinds include:
+
+- contradictory claims;
+- author/implementation mismatch;
+- static/runtime mismatch;
+- coverage mismatch;
+- other.
+
+A conflict remains `open`, may be explicitly `accepted`, or becomes `resolved` with a recorded resolution. Resolution never deletes the original evidence.
+
+## 7. Multi-run coverage
+
+Dynamic programs require more than one trace. `CoverageRecord` distinguishes:
+
+- `always_observed`
+- `sometimes_observed`
+- `static_reachable_unobserved`
+- `unreachable_under_configuration`
+- `unresolved`
+
+Example:
+
+```yaml
+subject_id: module.optional_depth_branch
+status: sometimes_observed
+considered_run_ids: [run.0, run.1, run.2]
+observed_run_ids: [run.1]
+```
+
+ATIR validates that observed runs are a subset of considered runs and that strong statuses such as `always_observed` are internally consistent.
+
+This makes statements such as "the model uses this branch" precise rather than binary and misleading.
+
+## 8. Tensor/value representation
+
+`TensorSpec` currently records:
 
 ```yaml
 shape: [B, T, 256, 1024]
@@ -89,115 +180,113 @@ semantics:
 
 Dimensions may be concrete integers, symbolic strings, or unknown (`null`).
 
-Future versions will add:
+The next value-schema extension will cover:
 
-- stride/storage/alias identity;
+- PyTrees / dict / tuple / dataclass structures;
+- scalar and non-tensor values;
+- stride/storage identity and aliasing;
+- mutation/version chains;
+- sparse, ragged, and quantized values;
 - named dimensions and coordinate semantics;
-- ragged/sparse/quantized values;
-- structured values (`dict`, tuple, dataclass, PyTree);
-- distribution/random-variable metadata;
-- mutation/version relationships.
+- distributions and stochastic values.
 
-## 6. Edge semantics
+These extensions must preserve the definition/occurrence/value identity split introduced in v0.2.
 
-ATIR does not use one generic arrow. Edges encode relations such as:
+## 9. Edge semantics
 
-- `data`: value/information flow;
-- `control`: execution/control dependency;
-- `contains`: hierarchy/grouping;
-- `calls`: source/runtime invocation;
-- `implements`: lower-level entities implementing a higher-level concept;
-- `parameter`: parameter dependency;
-- `gradient`: backward/gradient flow;
-- `alias`: values sharing identity/storage;
-- `reads` / `writes`: state/config/resource access;
-- `derived_from`: inference/projection relationship;
-- `next`: temporal/environment transition.
+ATIR does not use one generic arrow. Relations include:
 
-Graph views choose which edge classes to show rather than changing the underlying graph.
+- `data`
+- `control`
+- `contains`
+- `calls`
+- `implements`
+- `instance_of`
+- `produces`
+- `consumes`
+- `parameter`
+- `gradient`
+- `alias`
+- `reads` / `writes`
+- `derived_from`
+- `next`
 
-## 7. Multi-run model
+Views choose which relations to render; they do not rewrite the underlying evidence graph.
 
-Dynamic architectures require multiple executions. `TraceRun` records the entrypoint, arguments, configuration, framework versions, and arbitrary environment metadata.
+## 10. v0.1 → v0.2 migration
 
-The same ATIR project may therefore contain:
+`load_atir_json()` accepts v0.1 JSON and upgrades it before validation.
 
-```text
-run.train.seed0
-run.eval.task_pick_place
-run.eval.task_handover
-run.eval.occluded_case
+Migration is intentionally conservative:
+
+- source nodes → `source`;
+- module/operation nodes → `definition`;
+- tensor/input/output nodes → `value`;
+- parameter/config nodes → `state`;
+- other nodes → `group`;
+- empty claims/conflicts/coverage collections are added;
+- **no runtime occurrence is invented**.
+
+The payload records:
+
+```yaml
+metadata:
+  schema_migrations:
+    - from: "0.1"
+      to: "0.2"
 ```
 
-Coverage is accumulated across runs. ArchTrace must be able to distinguish:
+Unknown future schema versions are rejected rather than guessed.
 
-- path observed in every run;
-- path observed in some runs;
-- statically reachable but never observed;
-- unreachable/dead under current configuration;
-- unresolved because analysis is incomplete.
+## 11. What v0.2 now makes possible
 
-## 8. Semantic aggregation
+A future PyTorch backend can normalize a run as:
 
-Semantic nodes are evidence-backed groupings over mechanics:
+```text
+module.block                  # reusable definition
+    │
+    ├── call.run0.001         # occurrence 1
+    │      ├── consumes → tensor.run0.010
+    │      └── produces → tensor.run0.011
+    │
+    └── call.run0.017         # same definition, occurrence 2
+           ├── consumes → tensor.run0.080
+           └── produces → tensor.run0.081
+```
+
+A semantic engine can then group these into:
 
 ```text
 Semantic: Cross-Modal Fusion
-    contains/implements
-        Module: model.fusion
-        Module: model.cross_attention
-            contains
-                op.823 layer_norm
-                op.824 linear
-                op.825 reshape
-                op.826 attention
-                ...
+  implements → module.block
 ```
 
-A semantic engine may propose such a grouping, but it must retain:
+without collapsing the mechanics.
 
-- supporting source/runtime nodes;
-- evidence records;
-- confidence;
-- competing interpretations when necessary.
-
-## 9. Contradictions
-
-Contradiction is expected rather than treated as corruption.
-
-Example:
+An author declaration can coexist with runtime truth:
 
 ```text
-README:       "frozen vision encoder"
-config:       freeze_vision=false
-runtime:      vision parameters require_grad=True
-optimizer:    vision parameters are present
+claim.author.freeze = true
+claim.runtime.freeze = false
+              │
+              └── conflict.author_implementation
 ```
 
-ATIR should preserve all four facts and expose a contradiction to higher-level analysis. Planned v0.2 introduces explicit `Claim` and `Conflict` entities.
+and several traces can quantify which paths were actually exercised.
 
-## 10. Serialization
+## 12. Query contract
 
-The first canonical representation is versioned JSON generated by Pydantic models. The extension used by the CLI is currently:
+ArchTrace should ultimately answer queries over ATIR such as:
 
-```text
-*.atir.json
-```
+- show every execution occurrence of this shared definition;
+- trace a concrete tensor from RGB input to action output;
+- show all definitions that produced a value in run X;
+- find operations that are statically reachable but never observed;
+- find claims unsupported or contradicted by runtime evidence;
+- find modality fusion points;
+- compare shape-changing bottlenecks across two models;
+- determine whether a supposedly frozen backbone received gradients;
+- project a paper figure with at most N semantic nodes;
+- jump from any rendered component to exact source evidence.
 
-The schema must remain independent of any visualization library and any one ML framework.
-
-## 11. Query contract
-
-Everything ArchTrace ultimately does should be expressible as queries/projections over ATIR, for example:
-
-- trace all paths from `RGB` to `Action`;
-- find every shape-changing operation;
-- find fusion points between vision and language lineages;
-- show all operations implemented by `Cross-Modal Fusion`;
-- find semantic nodes unsupported by runtime evidence;
-- find author claims contradicted by execution;
-- compare modality bottlenecks between two models;
-- render a paper view with at most N major nodes;
-- jump from any visual node to exact source spans.
-
-This queryability is why ATIR, rather than a renderer or tracer, is the center of ArchTrace.
+ATIR is therefore not a renderer format. It is the **mechanical and epistemic substrate** of ArchTrace.

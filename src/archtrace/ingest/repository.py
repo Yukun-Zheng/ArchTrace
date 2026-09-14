@@ -96,6 +96,7 @@ def build_static_ir(summary: RepositorySummary) -> atir.ArchTraceIR:
         id="repo.root",
         level=atir.NodeLevel.SEMANTIC,
         kind=atir.NodeKind.OTHER,
+        identity_kind=atir.IdentityKind.GROUP,
         label=summary.root.name,
         role="repository",
     )
@@ -119,6 +120,7 @@ def build_static_ir(summary: RepositorySummary) -> atir.ArchTraceIR:
                 id=file_id,
                 level=atir.NodeLevel.SOURCE,
                 kind=atir.NodeKind.SOURCE,
+                identity_kind=atir.IdentityKind.SOURCE,
                 label=file_summary.path,
                 parent_ids=[repository_node.id],
                 source=[file_span],
@@ -160,6 +162,7 @@ def build_static_ir(summary: RepositorySummary) -> atir.ArchTraceIR:
                     id=class_id,
                     level=atir.NodeLevel.MODULE,
                     kind=atir.NodeKind.MODULE,
+                    identity_kind=atir.IdentityKind.DEFINITION,
                     label=class_name,
                     parent_ids=[file_id],
                     source=[file_span],
