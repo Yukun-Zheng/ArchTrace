@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from archtrace.ir import (
@@ -271,7 +271,13 @@ def _infer_node_hypotheses(
                 modalities=tuple(sorted(role_modalities, key=lambda item: item.value)),
             )
         )
-    results.sort(key=lambda item: (-item.confidence, _role_priority(item.role), item.role.value))
+    results.sort(
+        key=lambda item: (
+            -item.confidence,
+            _role_priority(item.role),
+            item.role.value,
+        )
+    )
     return results
 
 
@@ -525,7 +531,11 @@ def _node_text(node: ArchNode) -> str:
         if isinstance(value, (str, int, float, bool)):
             parts.extend((str(key), str(value)))
         elif isinstance(value, list):
-            parts.extend(str(item) for item in value if isinstance(item, (str, int, float)))
+            parts.extend(
+                str(item)
+                for item in value
+                if isinstance(item, (str, int, float))
+            )
     return _normalize_text(" ".join(parts))
 
 
