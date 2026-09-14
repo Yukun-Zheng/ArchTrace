@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from urllib.parse import quote, unquote
 
-from archtrace.ir import ArchNode, NodeLevel
+from archtrace.ir import ArchNode, NodeLevel, SourceSpan
 from archtrace.query.models import (
     Breadcrumb,
     ExplorerLevel,
@@ -41,10 +41,10 @@ def explorer_level(node: ArchNode) -> ExplorerLevel:
     return ExplorerLevel.OPERATION
 
 
-def explorer_source(span: object) -> ExplorerSourceSpan:
+def explorer_source(span: SourceSpan) -> ExplorerSourceSpan:
     return ExplorerSourceSpan(
-        path=str(span.path),
-        start_line=int(span.start_line),
+        path=span.path,
+        start_line=span.start_line,
         end_line=span.end_line,
         start_column=span.start_column,
         end_column=span.end_column,
