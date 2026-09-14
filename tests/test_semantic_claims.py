@@ -80,7 +80,7 @@ def _vision_graph(requires_grad: bool | None) -> ArchTraceIR:
 
 def _role_graph(
     nodes: list[tuple[str, str, NodeKind]],
-    edges: list[tuple[str, str]] = [],
+    edges: list[tuple[str, str]] | None = None,
 ) -> ArchTraceIR:
     evidence: list[Evidence] = []
     arch_nodes: list[ArchNode] = []
@@ -118,7 +118,7 @@ def _role_graph(
             target=target,
             kind=EdgeKind.DATA,
         )
-        for index, (source, target) in enumerate(edges)
+        for index, (source, target) in enumerate(edges or [])
     ]
     return ArchTraceIR(
         project=ProjectInfo(name="claim-fixture"),
@@ -132,7 +132,12 @@ def test_author_frozen_claim_conflicts_with_runtime_trainable_parameter() -> Non
     semantic = recover_semantics(_vision_graph(requires_grad=True))
     checked = add_author_claims(
         semantic,
-        [ContextSnippet(path="README.md", text="The vision encoder is frozen during training.")],
+        [
+            ContextSnippet(
+                path="README.md",
+                text="The vision encoder is frozen during training.",
+            )
+        ],
     )
 
     author_frozen = next(
@@ -159,7 +164,12 @@ def test_frozen_claim_without_mechanical_trainability_stays_unresolved() -> None
     semantic = recover_semantics(_vision_graph(requires_grad=None))
     checked = add_author_claims(
         semantic,
-        [ContextSnippet(path="README.md", text="The vision encoder is frozen during training.")],
+        [
+            ContextSnippet(
+                path="README.md",
+                text="The vision encoder is frozen during training.",
+            )
+        ],
     )
 
     author_frozen = next(
@@ -189,7 +199,12 @@ def test_author_component_claim_is_supported_by_recovered_fusion() -> None:
     )
     checked = add_author_claims(
         semantic,
-        [ContextSnippet(path="README.md", text="The model uses a cross-modal fusion module.")],
+        [
+            ContextSnippet(
+                path="README.md",
+                text="The model uses a cross-modal fusion module.",
+            )
+        ],
     )
 
     author_claim = next(
@@ -210,7 +225,12 @@ def test_unverified_author_component_becomes_declaration_only_and_not_paper_fact
     )
     checked = add_author_claims(
         semantic,
-        [ContextSnippet(path="README.md", text="A planner handles long-horizon decisions.")],
+        [
+            ContextSnippet(
+                path="README.md",
+                text="A planner handles long-horizon decisions.",
+            )
+        ],
     )
 
     planner_claim = next(
@@ -219,7 +239,9 @@ def test_unverified_author_component_becomes_declaration_only_and_not_paper_fact
         if claim.id.startswith("claim.author")
         and claim.metadata["semantic_role"] == SemanticRole.PLANNER.value
     )
-    declaration = next(node for node in checked.nodes if node.id == planner_claim.subject_id)
+    declaration = next(
+        node for node in checked.nodes if node.id == planner_claim.subject_id
+    )
     assert declaration.attributes["declaration_only"] is True
     assert planner_claim.metadata["implementation_check"] == "unresolved"
     assert not checked.conflicts
@@ -234,13 +256,19 @@ def test_negative_author_component_claim_conflicts_with_recovered_component() ->
     )
     checked = add_author_claims(
         semantic,
-        [ContextSnippet(path="README.md", text="The model does not use a planner.")],
+        [
+            ContextSnippet(
+                path="README.md",
+                text="The model does not use a planner.",
+            )
+        ],
     )
 
     author_claim = next(
         claim
         for claim in checked.claims
-        if claim.id.startswith("claim.author") and claim.predicate == "component_present"
+        if claim.id.startswith("claim.author")
+        and claim.predicate == "component_present"
     )
     assert author_claim.value is False
     assert author_claim.metadata["implementation_check"] == "contradicted"
@@ -286,4 +314,6 @@ def test_training_and_inference_semantic_views_share_both_phase_components() -> 
     assert SemanticRole.ACTION_HEAD.value in {
         node.role for node in inference_paper.nodes
     }
-    assert SemanticRole.LOSS.value not in {node.role for node in inference_paper.nodes}
+    assert SemanticRole.LOSS.value not in {
+        node.role for node in inference_paper.nodes
+    }
