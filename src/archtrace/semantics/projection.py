@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from archtrace.ir import ArchNode, ArchTraceIR, EdgeKind, NodeLevel
-from archtrace.semantics.ontology import SemanticRole, role_spec
+from archtrace.semantics.ontology import SemanticPhase, SemanticRole, role_spec
 
 
 @dataclass(frozen=True, slots=True)
@@ -14,6 +14,8 @@ class PaperViewPolicy:
     max_components: int = 12
     include_roles: tuple[SemanticRole, ...] = ()
     exclude_roles: tuple[SemanticRole, ...] = ()
+    phases: tuple[SemanticPhase, ...] = ()
+    include_author_declarations: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +41,43 @@ class PaperView:
     edges: list[PaperEdge]
 
 
+def select_semantic_components(
+    graph: ArchTraceIR,
+    *,
+    phase: SemanticPhase | None = None,
+    min_confidence: float = 0.0,
+    include_author_declarations: bool = False,
+) -> list[ArchNode]:
+    """Return deterministic L1 components for a training or inference view."""
+
+    if not 0.0 <= min_confidence <= 1.0:
+        raise ValueError("min_confidence must be in [0, 1]")
+
+    selected: list[ArchNode] = []
+    for node in graph.nodes:
+        if node.level != NodeLevel.SEMANTIC or node.role is None:
+            continue
+        if (
+            not include_author_declarations
+            and node.attributes.get("declaration_only") is True
+        ):
+            continue
+        if _confidence(node.attributes.get("confidence")) < min_confidence:
+            continue
+        if phase is not None and not _phase_matches(node, (phase,)):
+            continue
+        selected.append(node)
+
+    selected.sort(
+        key=lambda node: (
+            _role_priority(node.role or "unknown"),
+            _source_sort_key(node),
+            node.id,
+        )
+    )
+    return selected
+
+
 def project_paper_view(
     graph: ArchTraceIR,
     *,
@@ -54,27 +93,18 @@ def project_paper_view(
 
     include = {role.value for role in selected_policy.include_roles}
     exclude = {role.value for role in selected_policy.exclude_roles}
-    semantic_nodes: list[ArchNode] = []
-    for semantic_node in graph.nodes:
-        if semantic_node.level != NodeLevel.SEMANTIC or semantic_node.role is None:
-            continue
-        confidence = _confidence(semantic_node.attributes.get("confidence"))
-        if confidence < selected_policy.min_confidence:
-            continue
-        if include and semantic_node.role not in include:
-            continue
-        if semantic_node.role in exclude:
-            continue
-        semantic_nodes.append(semantic_node)
-
-    semantic_nodes.sort(
-        key=lambda semantic_node: (
-            _role_priority(semantic_node.role or "unknown"),
-            _source_sort_key(semantic_node),
-            semantic_node.id,
-        )
+    semantic_nodes = select_semantic_components(
+        graph,
+        min_confidence=selected_policy.min_confidence,
+        include_author_declarations=selected_policy.include_author_declarations,
     )
-    semantic_nodes = semantic_nodes[: selected_policy.max_components]
+    semantic_nodes = [
+        node
+        for node in semantic_nodes
+        if (not include or node.role in include)
+        and node.role not in exclude
+        and _phase_matches(node, selected_policy.phases)
+    ][: selected_policy.max_components]
 
     paper_nodes = [
         PaperNode(
@@ -116,6 +146,19 @@ def project_paper_view(
     return PaperView(nodes=paper_nodes, edges=paper_edges)
 
 
+def _phase_matches(node: ArchNode, requested: tuple[SemanticPhase, ...]) -> bool:
+    if not requested:
+        return True
+    raw_phase = node.attributes.get("phase", SemanticPhase.BOTH.value)
+    try:
+        component_phase = SemanticPhase(str(raw_phase))
+    except ValueError:
+        return False
+    if component_phase == SemanticPhase.BOTH:
+        return True
+    return component_phase in requested
+
+
 def _member_ids(node: ArchNode) -> list[str]:
     raw = node.attributes.get("member_ids", [])
     if not isinstance(raw, list):
@@ -141,8 +184,7 @@ def _role_priority(role_value: str) -> int:
         role = SemanticRole(role_value)
     except ValueError:
         return 999
-    spec = role_spec(role)
-    return 999 if spec is None else spec.priority
+    return role_spec(role).priority
 
 
 def _source_sort_key(node: ArchNode) -> tuple[str, int]:
