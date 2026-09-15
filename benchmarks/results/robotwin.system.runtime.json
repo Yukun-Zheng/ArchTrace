@@ -1,0 +1,81 @@
+{
+  "schema_version": "1",
+  "case_id": "robotwin",
+  "repository": "https://github.com/RoboTwin-Platform/RoboTwin.git",
+  "expected_revision": "6dde57155eafa3e4ebf6ad1f93a7cf7d5d41a755",
+  "actual_revision": "6dde57155eafa3e4ebf6ad1f93a7cf7d5d41a755",
+  "analyzer_revision": "bae60f6030ea9b523fc16ff6616435649342e03b",
+  "analyzer_dirty": false,
+  "mode": "runtime",
+  "status": "completed",
+  "elapsed_seconds": 9.096814799821004,
+  "metrics": {
+    "metric_kind": "system_runtime",
+    "trace_seconds": 9.043010637164116,
+    "runtime_nodes": 84,
+    "runtime_edges": 107,
+    "definitions": 14,
+    "source_definitions": 10,
+    "external_definitions": 4,
+    "occurrences": 23,
+    "values": 47,
+    "tensor_values": 4,
+    "tensor_spec_coverage": 1.0,
+    "adapter_occurrences": 20,
+    "transport_occurrences": 1,
+    "environment_occurrences": 2,
+    "consumes_edges": 46,
+    "produces_edges": 23,
+    "calls_edges": 16,
+    "next_edges": 22
+  },
+  "failures": [],
+  "metadata": {
+    "target_python_version": "3.10.21",
+    "target_python": "/home/ubuntu/miniforge3/envs/cvpr2027-robotwin/bin/python",
+    "runtime_cwd": "/home/ubuntu/CVPR2027/RoboTwin",
+    "runtime_resources": [
+      {
+        "path": "assets/objects/objaverse",
+        "kind": "directory",
+        "sha256": null,
+        "size_bytes": null
+      },
+      {
+        "path": "assets/objects/objaverse/list.json",
+        "kind": "file",
+        "sha256": "9c33b70f6e91788033d6cc3e1d58fe0ad09ced472679440083b31513f9c4bc6f",
+        "size_bytes": 22531
+      }
+    ],
+    "scenario_output": {
+      "bridge_source": "/home/ubuntu/ArchTrace-Benchmarks/repos/robotwin/scripts/eval_policy_xpolicylab.py",
+      "runtime_cwd": "/home/ubuntu/CVPR2027/RoboTwin",
+      "vision_keys": [
+        "cam_head",
+        "cam_left_wrist",
+        "cam_right_wrist"
+      ],
+      "state_keys": [
+        "left_arm_joint_state",
+        "left_ee_joint_state",
+        "left_ee_pose",
+        "right_arm_joint_state",
+        "right_ee_joint_state",
+        "right_ee_pose"
+      ],
+      "action_shape": [
+        14
+      ],
+      "action_type": "qpos"
+    },
+    "probe_count": 10,
+    "external_definition_count": 4,
+    "raw_trace": {
+      "definitions": 14,
+      "occurrences": 23,
+      "values": 47,
+      "edges": 107
+    }
+  }
+}
