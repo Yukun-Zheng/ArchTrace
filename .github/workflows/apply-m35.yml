@@ -1,0 +1,29 @@
+name: Apply M3.5 remaining patch
+
+on:
+  push:
+    branches: [real-world-benchmark]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: real-world-benchmark
+          fetch-depth: 0
+
+      - name: Apply verified server patch
+        run: |
+          git config user.name "Yukun Zheng"
+          git config user.email "zhengyukun2005@gmail.com"
+          git apply --check .archtrace-migration/m35-remaining.patch
+          git apply .archtrace-migration/m35-remaining.patch
+          git rm .archtrace-migration/m35-remaining.patch .github/workflows/apply-m35.yml
+          git add -A
+          git commit -m "M3.5: complete static hardening and regression suite"
+          git push origin HEAD:real-world-benchmark
