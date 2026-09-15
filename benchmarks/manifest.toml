@@ -52,6 +52,7 @@ tier = "research"
 modes = ["static", "runtime", "hybrid"]
 tags = ["vision", "world-model", "video", "robotics"]
 notes = "V-JEPA2 visual representation and world-model stress target."
+runtime_spec = "runtime/vjepa2-mini-vit.json"
 
 [[case]]
 id = "robotwin"
