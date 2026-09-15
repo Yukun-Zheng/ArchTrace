@@ -51,6 +51,10 @@ class FailureCategory(StrEnum):
     RUNTIME_OVERLAY_MISMATCH = "runtime_overlay_mismatch"
     HYBRID_ALIGNMENT_GAP = "hybrid_alignment_gap"
     HYBRID_RECONCILIATION_FAILURE = "hybrid_reconciliation_failure"
+    SYSTEM_RUNTIME_LAUNCH_FAILURE = "system_runtime_launch_failure"
+    SYSTEM_RUNTIME_EXECUTION_FAILURE = "system_runtime_execution_failure"
+    SYSTEM_RUNTIME_TRACE_INVALID = "system_runtime_trace_invalid"
+    SYSTEM_RUNTIME_RESOURCE_MISMATCH = "system_runtime_resource_mismatch"
 
 
 class BenchmarkCase(BaseModel):
@@ -64,6 +68,7 @@ class BenchmarkCase(BaseModel):
     notes: str | None = None
     runtime_spec: str | None = None
     runtime_environment: str | None = None
+    system_spec: str | None = None
 
 
 class BenchmarkManifest(BaseModel):
@@ -139,6 +144,50 @@ class RuntimeTargetSpec(BaseModel):
     torch_num_threads: int | None = Field(default=None, ge=1)
     torch_num_interop_threads: int | None = Field(default=None, ge=1)
     expected_output_shapes: list[list[int]] = Field(default_factory=list)
+
+
+class PythonProbeSpec(BaseModel):
+    module: str
+    symbol: str
+    role: str = "python"
+    boundary: str = "local"
+
+
+class SystemRuntimeResource(BaseModel):
+    path: str
+    kind: Literal["file", "directory"] = "file"
+    sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+
+class PythonSystemSpec(BaseModel):
+    schema_version: str = "1"
+    framework: Literal["python"] = "python"
+    scenario: str
+    python_paths: list[str] = Field(default_factory=lambda: ["."])
+    probes: list[PythonProbeSpec]
+    required_imports: list[str] = Field(default_factory=list)
+    resources: list[SystemRuntimeResource] = Field(default_factory=list)
+
+
+class SystemRuntimeBenchmarkMetrics(BaseModel):
+    metric_kind: Literal["system_runtime"] = "system_runtime"
+    trace_seconds: float
+    runtime_nodes: int
+    runtime_edges: int
+    definitions: int
+    source_definitions: int
+    external_definitions: int
+    occurrences: int
+    values: int
+    tensor_values: int
+    tensor_spec_coverage: float
+    adapter_occurrences: int
+    transport_occurrences: int
+    environment_occurrences: int
+    consumes_edges: int
+    produces_edges: int
+    calls_edges: int
+    next_edges: int
 
 
 class StaticBenchmarkMetrics(BaseModel):
@@ -226,7 +275,11 @@ class BenchmarkResult(BaseModel):
     status: BenchmarkStatus
     elapsed_seconds: float
     metrics: (
-        StaticBenchmarkMetrics | RuntimeBenchmarkMetrics | HybridBenchmarkMetrics | None
+        StaticBenchmarkMetrics
+        | RuntimeBenchmarkMetrics
+        | SystemRuntimeBenchmarkMetrics
+        | HybridBenchmarkMetrics
+        | None
     ) = None
     failures: list[BenchmarkFailure] = Field(default_factory=list)
     metadata: dict[str, object] = Field(default_factory=dict)
