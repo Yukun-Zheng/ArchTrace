@@ -1,0 +1,36 @@
+name: Apply OpenPI runtime environment patch
+
+on:
+  push:
+    branches: [runtime-openpi-env]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: runtime-openpi-env
+          fetch-depth: 0
+      - name: Apply verified patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .archtrace-sync/openpi-env.part00 \
+              .archtrace-sync/openpi-env.part01 \
+              .archtrace-sync/openpi-env.part02 \
+              .archtrace-sync/openpi-env.part03 \
+              .archtrace-sync/openpi-env.part04 > /tmp/openpi-env.patch
+          git apply --check /tmp/openpi-env.patch
+          git apply /tmp/openpi-env.patch
+          rm -rf .archtrace-sync
+          rm .github/workflows/apply-openpi-env.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "M3.5: add verified runtime environments and full pi0 target"
+          git push origin HEAD:runtime-openpi-env
