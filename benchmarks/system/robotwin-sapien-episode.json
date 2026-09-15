@@ -1,0 +1,36 @@
+{
+  "schema_version": "1",
+  "framework": "python",
+  "scenario": "../scenarios/robotwin_sapien_episode.py",
+  "python_paths": [".", "scripts", "description/utils"],
+  "required_imports": ["numpy", "yaml", "sapien", "curobo", "mplib"],
+  "probes": [
+    {"module": "envs.adjust_bottle", "symbol": "adjust_bottle.setup_demo", "role": "environment"},
+    {"module": "envs.adjust_bottle", "symbol": "adjust_bottle.load_actors", "role": "environment"},
+    {"module": "envs._base_task", "symbol": "Base_Task._init_task_env_", "role": "environment"},
+    {"module": "envs._base_task", "symbol": "Base_Task.get_obs", "role": "environment"},
+    {"module": "envs._base_task", "symbol": "Base_Task.take_action", "role": "environment"},
+    {"module": "envs._base_task", "symbol": "Base_Task.close_env", "role": "environment"},
+    {"module": "scripts.collect_data", "symbol": "get_embodiment_config", "role": "adapter"},
+    {"module": "scripts.eval_policy_xpolicylab", "symbol": "robotwin_obs_to_xpolicylab", "role": "adapter"},
+    {"module": "scripts.eval_policy_xpolicylab", "symbol": "convert_vision", "role": "adapter"},
+    {"module": "scripts.eval_policy_xpolicylab", "symbol": "convert_camera", "role": "adapter"},
+    {"module": "scripts.eval_policy_xpolicylab", "symbol": "convert_state", "role": "adapter"},
+    {"module": "scripts.eval_policy_xpolicylab", "symbol": "normalize_action_chunk", "role": "adapter"},
+    {"module": "scripts.eval_policy_xpolicylab", "symbol": "xpolicylab_action_to_robotwin", "role": "adapter"},
+    {"module": "scripts.eval_policy_xpolicylab", "symbol": "normalize_robotwin_action_type", "role": "adapter"},
+    {"module": "scripts.eval_policy_xpolicylab", "symbol": "action_array", "role": "adapter"},
+    {"module": "scripts.eval_policy_xpolicylab", "symbol": "action_gripper", "role": "adapter"},
+    {"module": "scripts.eval_policy_xpolicylab", "symbol": "first_present", "role": "adapter"}
+  ],
+  "resources": [
+    {"path": "assets/embodiments/aloha-agilex", "kind": "directory"},
+    {"path": "assets/embodiments/aloha-agilex/config.yml", "kind": "file", "sha256": "a4f043d2d4b44cca5ec47fb498a3194da3f87ff9530dcbfdcee1539a44423d57"},
+    {"path": "assets/embodiments/aloha-agilex/curobo_left.yml", "kind": "file", "sha256": "0e1480699203708f36fdfdad39d01f7fad5a50a5a20f69a65ec0ccd882a0d250"},
+    {"path": "assets/embodiments/aloha-agilex/curobo_right.yml", "kind": "file", "sha256": "4d138cd94524143d26a3f0f8ec83611666fe62614dffb44b698e68aa44c2d3f9"},
+    {"path": "assets/objects/001_bottle", "kind": "directory"},
+    {"path": "assets/objects/001_bottle/model_data13.json", "kind": "file", "sha256": "a0b94d276bf41e03a7b0c2fa7f8352c8c45b7bcaa8db2925328955fc8e18ef1f"},
+    {"path": "assets/objects/001_bottle/model_data16.json", "kind": "file", "sha256": "1c7fa677c6879c2ff3b31b0bb1e433330a9ca427a32dca5e20e6bd44680885c4"},
+    {"path": "assets/objects/objaverse/list.json", "kind": "file", "sha256": "9c33b70f6e91788033d6cc3e1d58fe0ad09ced472679440083b31513f9c4bc6f"}
+  ]
+}
