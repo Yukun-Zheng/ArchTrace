@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import importlib.metadata
 import importlib.util
 import json
 import os
@@ -25,6 +26,7 @@ from archtrace.benchmark.models import (
     FailureSeverity,
     HybridBenchmarkMetrics,
     RuntimeBenchmarkMetrics,
+    RuntimeEnvironmentSpec,
     RuntimeTargetSpec,
     RuntimeValueSpec,
 )
@@ -44,6 +46,27 @@ class _RuntimeExecution:
     stage_seconds: dict[str, float]
 
 
+@dataclass(frozen=True, slots=True)
+class _ResolvedOverlay:
+    repository_root: Path
+    installed_root: Path
+    repository_path: str
+    module: str
+    matched_files: int
+    private_copy_verified: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _RuntimeEnvironmentState:
+    packages: dict[str, str]
+    overlays: list[_ResolvedOverlay]
+
+
+def load_runtime_environment(path: str | Path) -> RuntimeEnvironmentSpec:
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    return RuntimeEnvironmentSpec.model_validate(payload)
+
+
 def load_runtime_spec(path: str | Path) -> RuntimeTargetSpec:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     return RuntimeTargetSpec.model_validate(payload)
@@ -54,6 +77,7 @@ def run_runtime_benchmark(
     repository: str | Path,
     spec: RuntimeTargetSpec,
     *,
+    environment: RuntimeEnvironmentSpec | None = None,
     allow_revision_mismatch: bool = False,
 ) -> BenchmarkResult:
     started = perf_counter()
@@ -65,7 +89,10 @@ def run_runtime_benchmark(
         return preflight
     actual_revision, failures = preflight
     try:
-        execution = _execute_pytorch_target(case, root, spec)
+        environment_state = _verify_runtime_environment(environment, root)
+        execution = _execute_pytorch_target(
+            case, root, spec, overlays=environment_state.overlays
+        )
     except _RuntimeBenchmarkError as exc:
         return _failed_runtime_result(
             case,
@@ -78,7 +105,12 @@ def run_runtime_benchmark(
 
     graph = execution.graph
     definitions = [node for node in graph.nodes if node.identity_kind == IdentityKind.DEFINITION]
-    target_definitions = _target_source_definitions(graph, root)
+    target_definitions = _target_source_definitions(
+        graph, root, role="pytorch_module_definition"
+    )
+    target_operator_definitions = _target_source_definitions(
+        graph, root, role="pytorch_operator_definition"
+    )
     tensor_nodes = [node for node in graph.nodes if node.tensor is not None]
     tensor_spec_nodes = [
         node
@@ -99,6 +131,7 @@ def run_runtime_benchmark(
         values=sum(node.identity_kind == IdentityKind.VALUE for node in graph.nodes),
         states=sum(node.identity_kind == IdentityKind.STATE for node in graph.nodes),
         target_source_definitions=len(target_definitions),
+        target_operator_source_definitions=len(target_operator_definitions),
         tensor_nodes=len(tensor_nodes),
         tensor_spec_nodes=len(tensor_spec_nodes),
         tensor_spec_coverage=_ratio(len(tensor_spec_nodes), len(tensor_nodes)),
@@ -117,11 +150,15 @@ def run_runtime_benchmark(
         metrics,
         metadata={
             "runtime_spec": spec.model_dump(mode="json"),
+            "environment": _environment_metadata(environment_state),
             "stage_seconds": execution.stage_seconds,
             "output_shapes": execution.output_shapes,
             "runtime_backend": graph.metadata.get("runtime_backend"),
             "operator_dispatch": graph.metadata.get("operator_dispatch"),
             "structured_captures": graph.metadata.get("structured_captures", []),
+            "runtime_source_overlay_remaps": graph.metadata.get(
+                "runtime_source_overlay_remaps", 0
+            ),
         },
     )
 
@@ -131,6 +168,7 @@ def run_hybrid_benchmark(
     repository: str | Path,
     spec: RuntimeTargetSpec,
     *,
+    environment: RuntimeEnvironmentSpec | None = None,
     allow_revision_mismatch: bool = False,
 ) -> BenchmarkResult:
     started = perf_counter()
@@ -140,11 +178,14 @@ def run_hybrid_benchmark(
         return preflight
     actual_revision, failures = preflight
     try:
+        environment_state = _verify_runtime_environment(environment, root)
         static_started = perf_counter()
         static_index = index_repository(root)
         static_graph = repository_index_to_atir(static_index)
         static_seconds = perf_counter() - static_started
-        execution = _execute_pytorch_target(case, root, spec)
+        execution = _execute_pytorch_target(
+            case, root, spec, overlays=environment_state.overlays
+        )
         reconcile_started = perf_counter()
         merged = reconcile_static_runtime(static_graph, execution.graph)
         reconciliation_seconds = perf_counter() - reconcile_started
@@ -176,7 +217,27 @@ def run_hybrid_benchmark(
         for item in alignments
         if isinstance(item, dict) and isinstance(item.get("runtime_definition_id"), str)
     }
-    target_definitions = _target_source_definitions(execution.graph, root)
+    target_definitions = _target_source_definitions(
+        execution.graph, root, role="pytorch_module_definition"
+    )
+    target_operator_definitions = _target_source_definitions(
+        execution.graph, root, role="pytorch_operator_definition"
+    )
+    unaligned_definitions = [
+        node for node in target_definitions if node.id not in aligned_ids
+    ]
+    if unaligned_definitions:
+        failures.append(
+            BenchmarkFailure(
+                category=FailureCategory.HYBRID_ALIGNMENT_GAP,
+                severity=FailureSeverity.WARNING,
+                message="Target-owned runtime definitions could not be source-aligned.",
+                count=len(unaligned_definitions),
+                examples=[
+                    _definition_example(node) for node in unaligned_definitions[:10]
+                ],
+            )
+        )
     coverage_counts = {status: 0 for status in CoverageStatus}
     for record in merged.coverage:
         coverage_counts[record.status] += 1
@@ -195,6 +256,7 @@ def run_hybrid_benchmark(
         target_alignment_rate=_ratio(
             sum(node.id in aligned_ids for node in target_definitions), len(target_definitions)
         ),
+        target_operator_definitions=len(target_operator_definitions),
         source_alignments=len(alignments),
         alias_edges=sum(edge.kind == EdgeKind.ALIAS for edge in merged.edges),
         coverage_records=len(merged.coverage),
@@ -211,13 +273,21 @@ def run_hybrid_benchmark(
         metrics,
         metadata={
             "runtime_spec": spec.model_dump(mode="json"),
+            "environment": _environment_metadata(environment_state),
             "stage_seconds": {
                 "static": static_seconds,
                 **execution.stage_seconds,
                 "reconciliation": reconciliation_seconds,
             },
             "output_shapes": execution.output_shapes,
-            "source_alignments": alignments,
+            "source_alignment_count": len(alignments),
+            "source_alignments": alignments[:50],
+            "unaligned_target_definitions": [
+                _definition_record(node) for node in unaligned_definitions[:50]
+            ],
+            "runtime_source_overlay_remaps": execution.graph.metadata.get(
+                "runtime_source_overlay_remaps", 0
+            ),
         },
     )
 
@@ -233,6 +303,8 @@ def _execute_pytorch_target(
     case: BenchmarkCase,
     repository: Path,
     spec: RuntimeTargetSpec,
+    *,
+    overlays: list[_ResolvedOverlay],
 ) -> _RuntimeExecution:
     if spec.framework != "pytorch":
         raise _RuntimeBenchmarkError(
@@ -276,6 +348,10 @@ def _execute_pytorch_target(
         construct_started = perf_counter()
         try:
             torch = importlib.import_module("torch")
+            if spec.torch_num_threads is not None:
+                torch.set_num_threads(spec.torch_num_threads)
+            if spec.torch_num_interop_threads is not None:
+                torch.set_num_interop_threads(spec.torch_num_interop_threads)
             torch.manual_seed(spec.seed)
             constructor_kwargs = {
                 key: _materialize_constructor_value(value)
@@ -309,6 +385,11 @@ def _execute_pytorch_target(
                     capture_export=spec.capture_export,
                 )
             trace_seconds = perf_counter() - trace_started
+            traced.ir = _remap_runtime_overlay_sources(
+                traced.ir, repository, overlays
+            )
+        except _RuntimeBenchmarkError:
+            raise
         except Exception as exc:
             raise _RuntimeBenchmarkError(
                 FailureCategory.RUNTIME_EXECUTION_FAILURE,
@@ -403,25 +484,233 @@ def _resolve_symbol(module: Any, symbol: str) -> Any:
 def _materialize_value(spec: RuntimeValueSpec, torch: Any) -> Any:
     if spec.kind == "scalar":
         return spec.value
+    if spec.kind == "mapping":
+        return {key: _materialize_value(item, torch) for key, item in spec.items.items()}
+    if spec.kind == "sequence":
+        values = [_materialize_value(item, torch) for item in spec.elements]
+        return tuple(values) if spec.sequence_type == "tuple" else values
+    if spec.kind == "object":
+        if spec.module is None or spec.symbol is None:
+            raise _RuntimeBenchmarkError(
+                FailureCategory.RUNTIME_SPEC_INVALID,
+                "object runtime values require module and symbol",
+            )
+        try:
+            module = importlib.import_module(spec.module)
+            target = _resolve_symbol(module, spec.symbol)
+            args = [_materialize_value(item, torch) for item in spec.constructor_args]
+            object_kwargs = {
+                key: _materialize_value(item, torch)
+                for key, item in spec.constructor_kwargs.items()
+            }
+            return target(*args, **object_kwargs)
+        except _RuntimeBenchmarkError:
+            raise
+        except Exception as exc:
+            raise _RuntimeBenchmarkError(
+                FailureCategory.RUNTIME_SPEC_INVALID,
+                f"cannot construct runtime value {spec.module}.{spec.symbol}: "
+                f"{type(exc).__name__}: {exc}",
+            ) from exc
+
     dtype = getattr(torch, spec.dtype, None)
     if dtype is None:
         raise _RuntimeBenchmarkError(
             FailureCategory.RUNTIME_SPEC_INVALID, f"unknown torch dtype: {spec.dtype}"
         )
-    kwargs: dict[str, Any] = {"dtype": dtype, "device": "cpu"}
+    tensor_kwargs: dict[str, Any] = {"dtype": dtype, "device": "cpu"}
     if spec.generator == "randn":
-        value = torch.randn(tuple(spec.shape), **kwargs)
+        value = torch.randn(tuple(spec.shape), **tensor_kwargs)
     elif spec.generator == "zeros":
-        value = torch.zeros(tuple(spec.shape), **kwargs)
+        value = torch.zeros(tuple(spec.shape), **tensor_kwargs)
     elif spec.generator == "ones":
-        value = torch.ones(tuple(spec.shape), **kwargs)
+        value = torch.ones(tuple(spec.shape), **tensor_kwargs)
     else:
-        value = torch.tensor(spec.values, **kwargs)
+        value = torch.tensor(spec.values, **tensor_kwargs)
         if spec.shape:
             value = value.reshape(tuple(spec.shape))
     if spec.requires_grad:
         value.requires_grad_(True)
     return value
+
+
+def _definition_example(node: Any) -> str:
+    if node.source:
+        span = node.source[0]
+        symbol = f"::{span.symbol}" if span.symbol else ""
+        return f"{node.label} @ {span.path}:{span.start_line}{symbol}"
+    return f"{node.label} ({node.id})"
+
+
+def _definition_record(node: Any) -> dict[str, object]:
+    return {
+        "id": node.id,
+        "label": node.label,
+        "role": node.role,
+        "source": [span.model_dump(mode="json") for span in node.source],
+    }
+
+
+def _verify_runtime_environment(
+    spec: RuntimeEnvironmentSpec | None, repository: Path
+) -> _RuntimeEnvironmentState:
+    if spec is None:
+        return _RuntimeEnvironmentState(packages={}, overlays=[])
+    if spec.python is not None:
+        actual_python = f"{sys.version_info.major}.{sys.version_info.minor}"
+        if actual_python != spec.python:
+            raise _RuntimeBenchmarkError(
+                FailureCategory.RUNTIME_ENVIRONMENT_MISMATCH,
+                f"expected Python {spec.python}, found {actual_python}",
+            )
+
+    versions: dict[str, str] = {}
+    for requirement in spec.packages:
+        try:
+            actual = importlib.metadata.version(requirement.distribution)
+        except importlib.metadata.PackageNotFoundError as exc:
+            raise _RuntimeBenchmarkError(
+                FailureCategory.RUNTIME_ENVIRONMENT_MISMATCH,
+                f"missing required distribution: {requirement.distribution}",
+            ) from exc
+        if not _version_matches(actual, requirement.version):
+            raise _RuntimeBenchmarkError(
+                FailureCategory.RUNTIME_ENVIRONMENT_MISMATCH,
+                f"expected {requirement.distribution} {requirement.version}, found {actual}",
+            )
+        versions[requirement.distribution] = actual
+
+    overlays: list[_ResolvedOverlay] = []
+    for overlay in spec.overlays:
+        repository_root = (repository / overlay.repository_path).resolve()
+        if not repository_root.is_dir() or not repository_root.is_relative_to(repository):
+            raise _RuntimeBenchmarkError(
+                FailureCategory.RUNTIME_OVERLAY_MISMATCH,
+                f"overlay source is outside/missing from repository: {overlay.repository_path}",
+            )
+        module_spec = importlib.util.find_spec(overlay.module)
+        if module_spec is None:
+            raise _RuntimeBenchmarkError(
+                FailureCategory.RUNTIME_OVERLAY_MISMATCH,
+                f"overlay destination module is not importable: {overlay.module}",
+            )
+        if module_spec.submodule_search_locations:
+            installed_root = Path(next(iter(module_spec.submodule_search_locations))).resolve()
+        elif module_spec.origin is not None:
+            installed_root = Path(module_spec.origin).resolve().parent
+        else:
+            raise _RuntimeBenchmarkError(
+                FailureCategory.RUNTIME_OVERLAY_MISMATCH,
+                f"cannot resolve module filesystem root: {overlay.module}",
+            )
+
+        source_files = sorted(repository_root.rglob("*.py"))
+        mismatches: list[str] = []
+        shared_links: list[str] = []
+        matched = 0
+        for source_file in source_files:
+            relative = source_file.relative_to(repository_root)
+            installed_file = installed_root / relative
+            if (
+                not installed_file.is_file()
+                or installed_file.read_bytes() != source_file.read_bytes()
+            ):
+                mismatches.append(relative.as_posix())
+                continue
+            if overlay.require_private_copy and installed_file.stat().st_nlink > 1:
+                shared_links.append(relative.as_posix())
+                continue
+            matched += 1
+        if mismatches:
+            examples = ", ".join(mismatches[:5])
+            raise _RuntimeBenchmarkError(
+                FailureCategory.RUNTIME_OVERLAY_MISMATCH,
+                f"overlay {overlay.module} differs from repository source in "
+                f"{len(mismatches)} file(s): {examples}",
+            )
+        if shared_links:
+            examples = ", ".join(shared_links[:5])
+            raise _RuntimeBenchmarkError(
+                FailureCategory.RUNTIME_OVERLAY_MISMATCH,
+                f"overlay {overlay.module} is backed by shared hardlinks in "
+                f"{len(shared_links)} file(s): {examples}",
+            )
+        overlays.append(
+            _ResolvedOverlay(
+                repository_root=repository_root,
+                installed_root=installed_root,
+                repository_path=overlay.repository_path,
+                module=overlay.module,
+                matched_files=matched,
+                private_copy_verified=overlay.require_private_copy,
+            )
+        )
+    return _RuntimeEnvironmentState(packages=versions, overlays=overlays)
+
+
+def _version_matches(actual: str, expected: str) -> bool:
+    return actual == expected or actual.split("+", 1)[0] == expected
+
+
+def _environment_metadata(state: _RuntimeEnvironmentState) -> dict[str, object]:
+    return {
+        "packages": dict(sorted(state.packages.items())),
+        "overlays": [
+            {
+                "module": overlay.module,
+                "repository_path": overlay.repository_path,
+                "matched_files": overlay.matched_files,
+                "private_copy_verified": overlay.private_copy_verified,
+            }
+            for overlay in state.overlays
+        ],
+    }
+
+
+def _remap_runtime_overlay_sources(
+    graph: Any, repository: Path, overlays: list[_ResolvedOverlay]
+) -> Any:
+    if not overlays:
+        return graph
+
+    remapped_count = 0
+
+    def remap_span(span: Any) -> Any:
+        nonlocal remapped_count
+        source_path = Path(span.path)
+        if not source_path.is_absolute():
+            return span
+        resolved = source_path.resolve()
+        for overlay in overlays:
+            try:
+                relative = resolved.relative_to(overlay.installed_root)
+            except ValueError:
+                continue
+            repository_path = overlay.repository_root / relative
+            if repository_path.is_file():
+                remapped_count += 1
+                return span.model_copy(
+                    update={"path": repository_path.relative_to(repository).as_posix()}
+                )
+        return span
+
+    nodes = [
+        node.model_copy(update={"source": [remap_span(span) for span in node.source]})
+        for node in graph.nodes
+    ]
+    evidence = [
+        item.model_copy(update={"source": remap_span(item.source)})
+        if item.source is not None
+        else item
+        for item in graph.evidence
+    ]
+    metadata = dict(graph.metadata)
+    metadata["runtime_source_overlay_remaps"] = remapped_count
+    return type(graph).model_validate(
+        graph.model_copy(
+            update={"nodes": nodes, "evidence": evidence, "metadata": metadata}
+        ).model_dump()
+    )
 
 
 def _tensor_shapes(value: Any, torch: Any) -> list[list[int]]:
@@ -440,10 +729,14 @@ def _tensor_shapes(value: Any, torch: Any) -> list[list[int]]:
     return []
 
 
-def _target_source_definitions(graph: Any, root: Path) -> list[Any]:
+def _target_source_definitions(
+    graph: Any, root: Path, *, role: str | None = None
+) -> list[Any]:
     result = []
     for node in graph.nodes:
         if node.identity_kind != IdentityKind.DEFINITION or not node.source:
+            continue
+        if role is not None and node.role != role:
             continue
         if any(_span_inside_root(span.path, root) for span in node.source):
             result.append(node)

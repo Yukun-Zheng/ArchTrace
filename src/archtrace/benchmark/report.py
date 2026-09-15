@@ -71,7 +71,7 @@ def _runtime_table(results: list[BenchmarkResult]) -> list[str]:
     lines = [
         "## Runtime",
         "",
-        "| Case | Status | Trace | Target defs | Nodes | Op defs | Tensor spec |",
+        "| Case | Status | Trace | Target module defs | Nodes | Op defs | Tensor spec |",
         "| --- | --- | ---: | ---: | ---: | ---: | ---: |",
     ]
     for result in results:
@@ -90,7 +90,7 @@ def _hybrid_table(results: list[BenchmarkResult]) -> list[str]:
     lines = [
         "## Hybrid",
         "",
-        "| Case | Status | Reconcile | Target alignment | Alignments | Merged nodes |",
+        "| Case | Status | Reconcile | Target module alignment | Alignments | Merged nodes |",
         "| --- | --- | ---: | ---: | ---: | ---: |",
     ]
     for result in results:

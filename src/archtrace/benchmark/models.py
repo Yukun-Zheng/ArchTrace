@@ -47,6 +47,9 @@ class FailureCategory(StrEnum):
     RUNTIME_CONSTRUCTION_FAILURE = "runtime_construction_failure"
     RUNTIME_EXECUTION_FAILURE = "runtime_execution_failure"
     RUNTIME_OUTPUT_MISMATCH = "runtime_output_mismatch"
+    RUNTIME_ENVIRONMENT_MISMATCH = "runtime_environment_mismatch"
+    RUNTIME_OVERLAY_MISMATCH = "runtime_overlay_mismatch"
+    HYBRID_ALIGNMENT_GAP = "hybrid_alignment_gap"
     HYBRID_RECONCILIATION_FAILURE = "hybrid_reconciliation_failure"
 
 
@@ -60,6 +63,7 @@ class BenchmarkCase(BaseModel):
     tags: list[str] = Field(default_factory=list)
     notes: str | None = None
     runtime_spec: str | None = None
+    runtime_environment: str | None = None
 
 
 class BenchmarkManifest(BaseModel):
@@ -82,13 +86,38 @@ class BenchmarkFailure(BaseModel):
 
 
 class RuntimeValueSpec(BaseModel):
-    kind: Literal["tensor", "scalar"] = "tensor"
+    kind: Literal["tensor", "scalar", "mapping", "sequence", "object"] = "tensor"
     shape: list[int] = Field(default_factory=list)
     dtype: str = "float32"
     generator: Literal["randn", "zeros", "ones", "values"] = "randn"
     values: list[int | float | bool] = Field(default_factory=list)
     value: int | float | bool | str | None = None
     requires_grad: bool = False
+    items: dict[str, RuntimeValueSpec] = Field(default_factory=dict)
+    elements: list[RuntimeValueSpec] = Field(default_factory=list)
+    sequence_type: Literal["list", "tuple"] = "list"
+    module: str | None = None
+    symbol: str | None = None
+    constructor_args: list[RuntimeValueSpec] = Field(default_factory=list)
+    constructor_kwargs: dict[str, RuntimeValueSpec] = Field(default_factory=dict)
+
+
+class RuntimePackageRequirement(BaseModel):
+    distribution: str
+    version: str
+
+
+class RuntimeSourceOverlay(BaseModel):
+    repository_path: str
+    module: str
+    require_private_copy: bool = False
+
+
+class RuntimeEnvironmentSpec(BaseModel):
+    schema_version: str = "1"
+    python: str | None = None
+    packages: list[RuntimePackageRequirement] = Field(default_factory=list)
+    overlays: list[RuntimeSourceOverlay] = Field(default_factory=list)
 
 
 class RuntimeTargetSpec(BaseModel):
@@ -107,6 +136,8 @@ class RuntimeTargetSpec(BaseModel):
     capture_operators: bool = True
     capture_fx: bool = False
     capture_export: bool = False
+    torch_num_threads: int | None = Field(default=None, ge=1)
+    torch_num_interop_threads: int | None = Field(default=None, ge=1)
     expected_output_shapes: list[list[int]] = Field(default_factory=list)
 
 
@@ -151,6 +182,7 @@ class RuntimeBenchmarkMetrics(BaseModel):
     values: int
     states: int
     target_source_definitions: int
+    target_operator_source_definitions: int = 0
     tensor_nodes: int
     tensor_spec_nodes: int
     tensor_spec_coverage: float
@@ -173,6 +205,7 @@ class HybridBenchmarkMetrics(BaseModel):
     target_runtime_definitions: int
     aligned_target_runtime_definitions: int
     target_alignment_rate: float
+    target_operator_definitions: int = 0
     source_alignments: int
     alias_edges: int
     coverage_records: int

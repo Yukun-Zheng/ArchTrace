@@ -31,6 +31,8 @@ tier = "research"
 modes = ["static", "runtime", "hybrid"]
 tags = ["robotics", "vla", "pi0", "multimodal"]
 notes = "Physical Intelligence openpi; later-stage VLA stress target."
+runtime_spec = "runtime/openpi-pi0.json"
+runtime_environment = "environments/openpi-pytorch.json"
 
 [[case]]
 id = "rdt"

@@ -13,6 +13,9 @@ from archtrace.benchmark.models import (
     FailureSeverity,
     HybridBenchmarkMetrics,
     RuntimeBenchmarkMetrics,
+    RuntimeEnvironmentSpec,
+    RuntimePackageRequirement,
+    RuntimeSourceOverlay,
     RuntimeTargetSpec,
     RuntimeValueSpec,
     StaticBenchmarkMetrics,
@@ -20,6 +23,7 @@ from archtrace.benchmark.models import (
 from archtrace.benchmark.report import render_markdown_report
 from archtrace.benchmark.runner import run_static_benchmark, write_benchmark_result
 from archtrace.benchmark.runtime import (
+    load_runtime_environment,
     load_runtime_spec,
     run_hybrid_benchmark,
     run_runtime_benchmark,
@@ -37,10 +41,14 @@ __all__ = [
     "FailureSeverity",
     "HybridBenchmarkMetrics",
     "RuntimeBenchmarkMetrics",
+    "RuntimeEnvironmentSpec",
+    "RuntimePackageRequirement",
+    "RuntimeSourceOverlay",
     "RuntimeTargetSpec",
     "RuntimeValueSpec",
     "StaticBenchmarkMetrics",
     "load_benchmark_manifest",
+    "load_runtime_environment",
     "load_runtime_spec",
     "render_markdown_report",
     "run_hybrid_benchmark",

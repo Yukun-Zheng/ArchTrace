@@ -1,0 +1,81 @@
+{
+  "schema_version": "1",
+  "python": "3.11",
+  "packages": [
+    {
+      "distribution": "torch",
+      "version": "2.7.1"
+    },
+    {
+      "distribution": "torchvision",
+      "version": "0.22.1"
+    },
+    {
+      "distribution": "transformers",
+      "version": "4.53.2"
+    },
+    {
+      "distribution": "numpy",
+      "version": "1.26.4"
+    },
+    {
+      "distribution": "jax",
+      "version": "0.5.3"
+    },
+    {
+      "distribution": "flax",
+      "version": "0.10.2"
+    },
+    {
+      "distribution": "ml-dtypes",
+      "version": "0.4.1"
+    },
+    {
+      "distribution": "tensorstore",
+      "version": "0.1.74"
+    },
+    {
+      "distribution": "einops",
+      "version": "0.8.2"
+    },
+    {
+      "distribution": "augmax",
+      "version": "0.4.1"
+    },
+    {
+      "distribution": "dm-tree",
+      "version": "0.1.10"
+    },
+    {
+      "distribution": "jaxtyping",
+      "version": "0.2.36"
+    },
+    {
+      "distribution": "beartype",
+      "version": "0.19.0"
+    },
+    {
+      "distribution": "chex",
+      "version": "0.1.90"
+    },
+    {
+      "distribution": "equinox",
+      "version": "0.13.8"
+    },
+    {
+      "distribution": "treescope",
+      "version": "0.1.10"
+    },
+    {
+      "distribution": "safetensors",
+      "version": "0.8.0"
+    }
+  ],
+  "overlays": [
+    {
+      "repository_path": "src/openpi/models_pytorch/transformers_replace",
+      "module": "transformers",
+      "require_private_copy": true
+    }
+  ]
+}

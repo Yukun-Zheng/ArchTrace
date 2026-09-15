@@ -14,6 +14,7 @@ from archtrace.benchmark import (
     BenchmarkResult,
     StaticBenchmarkMetrics,
     load_benchmark_manifest,
+    load_runtime_environment,
     load_runtime_spec,
     render_markdown_report,
     run_hybrid_benchmark,
@@ -217,8 +218,17 @@ def benchmark_runtime(
     if case.runtime_spec is None:
         raise typer.BadParameter(f"benchmark case {case_id!r} has no runtime_spec")
     spec = load_runtime_spec(manifest.parent / case.runtime_spec)
+    environment = (
+        load_runtime_environment(manifest.parent / case.runtime_environment)
+        if case.runtime_environment is not None
+        else None
+    )
     result = run_runtime_benchmark(
-        case, repository, spec, allow_revision_mismatch=allow_revision_mismatch
+        case,
+        repository,
+        spec,
+        environment=environment,
+        allow_revision_mismatch=allow_revision_mismatch,
     )
     destination = output or Path("benchmarks/results") / f"{case.id}.runtime.json"
     write_benchmark_result(result, destination)
@@ -246,8 +256,17 @@ def benchmark_hybrid(
     if case.runtime_spec is None:
         raise typer.BadParameter(f"benchmark case {case_id!r} has no runtime_spec")
     spec = load_runtime_spec(manifest.parent / case.runtime_spec)
+    environment = (
+        load_runtime_environment(manifest.parent / case.runtime_environment)
+        if case.runtime_environment is not None
+        else None
+    )
     result = run_hybrid_benchmark(
-        case, repository, spec, allow_revision_mismatch=allow_revision_mismatch
+        case,
+        repository,
+        spec,
+        environment=environment,
+        allow_revision_mismatch=allow_revision_mismatch,
     )
     destination = output or Path("benchmarks/results") / f"{case.id}.hybrid.json"
     write_benchmark_result(result, destination)
