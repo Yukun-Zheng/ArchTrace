@@ -16,7 +16,7 @@ jobs:
       - name: Apply verified server patch
         shell: bash
         run: |
-          base64 -d .migration/runtime-m35.patch.gz.b64 | gzip -d > /tmp/runtime-m35.patch
+          cat .migration/runtime-part-* | base64 -d | gzip -d > /tmp/runtime-m35.patch
           git apply --check /tmp/runtime-m35.patch
           git apply /tmp/runtime-m35.patch
           rm -rf .migration .github/workflows/apply-runtime-m35.yml
