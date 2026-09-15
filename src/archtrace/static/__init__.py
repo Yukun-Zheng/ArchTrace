@@ -20,6 +20,7 @@ from archtrace.static.python_index import (
     PythonFileIndex,
     PythonSymbol,
     RepositoryIndex,
+    RepositoryScanPolicy,
     SymbolKind,
     index_repository,
 )
@@ -39,6 +40,7 @@ __all__ = [
     "PythonFileIndex",
     "PythonSymbol",
     "RepositoryIndex",
+    "RepositoryScanPolicy",
     "SymbolKind",
     "analyze_interprocedural_flow",
     "index_repository",

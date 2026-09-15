@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import builtins
 import json
 import re
 import tomllib
@@ -36,6 +37,17 @@ _ENTRYPOINT_NAMES = {
     "app.py",
 }
 _FRAMEWORK_IMPORTS = {"torch", "jax", "tensorflow"}
+_BUILTIN_CALLS = frozenset(dir(builtins))
+_VENDORED_PARTS = {
+    "third_party",
+    "third-party",
+    "vendor",
+    "vendors",
+    "external",
+    "externals",
+    "deps",
+    "dependencies",
+}
 
 
 class SymbolKind(StrEnum):
@@ -61,6 +73,7 @@ class PythonSymbol:
     kind: SymbolKind
     span: SourceSpan
     parent_id: str | None = None
+    bases: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -124,6 +137,19 @@ class PythonFileIndex:
     parse_error: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class RepositoryScanPolicy:
+    """Repository boundary policy for static analysis.
+
+    Vendored dependency trees are excluded by default because they describe dependency
+    internals rather than the architecture owned by the target research repository.
+    """
+
+    include_vendored: bool = False
+    include_nested_repositories: bool = False
+    extra_ignored_parts: frozenset[str] = frozenset()
+
+
 @dataclass(slots=True)
 class RepositoryIndex:
     root: Path
@@ -136,16 +162,30 @@ class RepositoryIndex:
     entrypoints: list[EntrypointCandidate]
 
 
-def index_repository(root: str | Path) -> RepositoryIndex:
+def index_repository(
+    root: str | Path,
+    *,
+    scan_policy: RepositoryScanPolicy | None = None,
+) -> RepositoryIndex:
     root_path = Path(root).resolve()
     if not root_path.exists():
         raise FileNotFoundError(root_path)
     if not root_path.is_dir():
         raise NotADirectoryError(root_path)
 
+    policy = scan_policy or RepositoryScanPolicy()
+    ignored_parts = set(_IGNORED_PARTS) | set(policy.extra_ignored_parts)
+    if not policy.include_vendored:
+        ignored_parts.update(_VENDORED_PARTS)
+    nested_roots = (
+        []
+        if policy.include_nested_repositories
+        else _nested_repository_roots(root_path, ignored_parts)
+    )
+
     files: list[PythonFileIndex] = []
     for path in sorted(root_path.rglob("*.py")):
-        if _ignored(path):
+        if _ignored(path, ignored_parts, nested_roots):
             continue
         files.append(_index_python_file(root_path, path))
 
@@ -155,7 +195,7 @@ def index_repository(root: str | Path) -> RepositoryIndex:
     _resolve_calls(files, symbols, calls)
     dataflow = _build_dataflow(calls)
     config_entries = [entry for file in files for entry in file.config_entries]
-    config_entries.extend(_index_config_files(root_path))
+    config_entries.extend(_index_config_files(root_path, ignored_parts, nested_roots))
     entrypoints = _entrypoint_candidates(files)
 
     return RepositoryIndex(
@@ -274,6 +314,7 @@ class _FileAnalyzer(ast.NodeVisitor):
             kind=SymbolKind.CLASS,
             span=_span(self.index.path, node, qualname),
             parent_id=parent.id,
+            bases=[_expr_text(base) for base in node.bases],
         )
         self.index.symbols.append(symbol)
         self._scope.append(symbol)
@@ -367,19 +408,34 @@ class _FileAnalyzer(ast.NodeVisitor):
                 continue
             name = _expr_text(decorator.func)
             if name.endswith("hydra.main") or name == "hydra.main":
-                metadata = {
-                    keyword.arg: _literal_or_text(keyword.value)
-                    for keyword in decorator.keywords
-                    if keyword.arg is not None
-                }
+                value: dict[str, Any] = {}
+                reference_metadata: dict[str, Any] = {}
+                dynamic_fields: list[str] = []
+                for keyword in decorator.keywords:
+                    if keyword.arg is None:
+                        continue
+                    if keyword.arg in {"config_path", "config_name"}:
+                        resolved = _static_path_expression(keyword.value, self.index.path)
+                        if resolved is not None:
+                            value[keyword.arg] = resolved[0]
+                            if keyword.arg == "config_path" and resolved[1]:
+                                reference_metadata["config_path_repository_relative"] = True
+                        else:
+                            value[keyword.arg] = _expr_text(keyword.value)
+                            dynamic_fields.append(keyword.arg)
+                    else:
+                        value[keyword.arg] = _literal_or_text(keyword.value)
+                if dynamic_fields:
+                    reference_metadata["dynamic_fields"] = sorted(dynamic_fields)
                 self.index.config_entries.append(
                     ConfigEntry(
                         id=f"config.python.{self.index.path}.{node.lineno}.hydra",
                         kind="hydra_entrypoint",
                         path=self.index.path,
                         key=node.name,
-                        value=metadata,
+                        value=value,
                         span=_span(self.index.path, decorator, "hydra.main"),
+                        metadata=reference_metadata,
                     )
                 )
                 self.index.entrypoint_reasons.append((4, "contains @hydra.main entrypoint"))
@@ -406,14 +462,24 @@ class _FileAnalyzer(ast.NodeVisitor):
                 )
                 self.index.entrypoint_reasons.append((1, "defines argparse options"))
         if callee in {"OmegaConf.load", "omegaconf.OmegaConf.load"} and node.args:
+            resolved = _static_path_expression(node.args[0], self.index.path)
+            reference_metadata: dict[str, Any] = {}
+            if resolved is None:
+                value = _expr_text(node.args[0])
+                reference_metadata["dynamic_fields"] = ["config_path"]
+            else:
+                value = resolved[0]
+                if resolved[1]:
+                    reference_metadata["config_path_repository_relative"] = True
             self.index.config_entries.append(
                 ConfigEntry(
                     id=f"config.python.{self.index.path}.{node.lineno}.omegaconf",
                     kind="omegaconf_load",
                     path=self.index.path,
                     key="config_path",
-                    value=_literal_or_text(node.args[0]),
+                    value=value,
                     span=_span(self.index.path, node, callee),
+                    metadata=reference_metadata,
                 )
             )
 
@@ -444,6 +510,7 @@ def _resolve_calls(
             caller,
             imports,
             full_symbols,
+            imports_by_module,
         )
         call.resolved_target = target
         call.resolution = resolution
@@ -457,6 +524,7 @@ def _resolve_callee_target(
     caller: PythonSymbol,
     imports: dict[str, ImportBinding],
     symbols: dict[str, PythonSymbol],
+    imports_by_module: dict[str, dict[str, ImportBinding]],
 ) -> tuple[str | None, CallResolution]:
     if not callee:
         return None, CallResolution.DYNAMIC
@@ -471,15 +539,33 @@ def _resolve_callee_target(
             if binding.imported_name is not None:
                 target = f"{target}.{binding.imported_name}"
             return target, (CallResolution.LOCAL if target in symbols else CallResolution.EXTERNAL)
+        if callee in _BUILTIN_CALLS:
+            return f"builtins.{callee}", CallResolution.EXTERNAL
         return None, CallResolution.DYNAMIC
 
     head, tail = callee.split(".", 1)
     if head == "self" and caller.kind == SymbolKind.METHOD:
-        class_name = _caller_class_name(caller)
-        if class_name is not None:
-            target = f"{caller.module}.{class_name}.{tail}"
-            if target in symbols:
-                return target, CallResolution.LOCAL
+        if "." in tail:
+            return None, CallResolution.DYNAMIC
+        class_target = _caller_class_target(caller)
+        if class_target is not None:
+            inherited_target = _find_method_in_hierarchy(
+                class_target, tail, symbols, imports_by_module
+            )
+            if inherited_target is not None:
+                return inherited_target, CallResolution.LOCAL
+        return None, CallResolution.DYNAMIC
+
+    if head == "super" and caller.kind == SymbolKind.METHOD:
+        if "." in tail:
+            return None, CallResolution.DYNAMIC
+        class_target = _caller_class_target(caller)
+        if class_target is not None:
+            super_target = _find_method_in_bases(
+                class_target, tail, symbols, imports_by_module
+            )
+            if super_target is not None:
+                return super_target, CallResolution.LOCAL
         return None, CallResolution.DYNAMIC
 
     binding = imports.get(head)
@@ -491,6 +577,84 @@ def _resolve_callee_target(
         return target, (CallResolution.LOCAL if target in symbols else CallResolution.EXTERNAL)
 
     return None, CallResolution.DYNAMIC
+
+
+def _caller_class_target(symbol: PythonSymbol) -> str | None:
+    class_name = _caller_class_name(symbol)
+    return None if class_name is None else f"{symbol.module}.{class_name}"
+
+
+def _find_method_in_hierarchy(
+    class_target: str,
+    method_name: str,
+    symbols: dict[str, PythonSymbol],
+    imports_by_module: dict[str, dict[str, ImportBinding]],
+    visited: set[str] | None = None,
+) -> str | None:
+    seen = set() if visited is None else visited
+    if class_target in seen:
+        return None
+    seen.add(class_target)
+    direct = f"{class_target}.{method_name}"
+    if direct in symbols:
+        return direct
+    return _find_method_in_bases(
+        class_target, method_name, symbols, imports_by_module, seen
+    )
+
+
+def _find_method_in_bases(
+    class_target: str,
+    method_name: str,
+    symbols: dict[str, PythonSymbol],
+    imports_by_module: dict[str, dict[str, ImportBinding]],
+    visited: set[str] | None = None,
+) -> str | None:
+    seen = set() if visited is None else visited
+    class_symbol = symbols.get(class_target)
+    if class_symbol is None or class_symbol.kind != SymbolKind.CLASS:
+        return None
+    imports = imports_by_module.get(class_symbol.module, {})
+    for base in class_symbol.bases:
+        base_target = _resolve_base_target(base, class_symbol.module, imports, symbols)
+        if base_target is None:
+            continue
+        target = _find_method_in_hierarchy(
+            base_target, method_name, symbols, imports_by_module, seen
+        )
+        if target is not None:
+            return target
+    return None
+
+
+def _resolve_base_target(
+    base: str,
+    module: str,
+    imports: dict[str, ImportBinding],
+    symbols: dict[str, PythonSymbol],
+) -> str | None:
+    if not base:
+        return None
+    if "." not in base:
+        same_module = f"{module}.{base}"
+        if same_module in symbols:
+            return same_module
+        binding = imports.get(base)
+        if binding is None:
+            return None
+        target = binding.imported_module
+        if binding.imported_name is not None:
+            target = f"{target}.{binding.imported_name}"
+        return target if target in symbols else None
+    head, tail = base.split(".", 1)
+    binding = imports.get(head)
+    if binding is None:
+        return base if base in symbols else None
+    target = binding.imported_module
+    if binding.imported_name is not None:
+        target = f"{target}.{binding.imported_name}"
+    target = f"{target}.{tail}"
+    return target if target in symbols else None
 
 
 def _build_dataflow(calls: list[CallSite]) -> list[DataFlowLink]:
@@ -535,10 +699,14 @@ def _entrypoint_candidates(files: list[PythonFileIndex]) -> list[EntrypointCandi
     return sorted(candidates, key=lambda item: (-item.score, item.path))
 
 
-def _index_config_files(root: Path) -> list[ConfigEntry]:
+def _index_config_files(
+    root: Path,
+    ignored_parts: set[str],
+    nested_roots: list[Path],
+) -> list[ConfigEntry]:
     entries: list[ConfigEntry] = []
     for path in sorted(root.rglob("*")):
-        if not path.is_file() or _ignored(path):
+        if not path.is_file() or _ignored(path, ignored_parts, nested_roots):
             continue
         suffix = path.suffix.lower()
         if suffix not in {".json", ".toml", ".yaml", ".yml"}:
@@ -729,6 +897,46 @@ def _literal_or_text(node: ast.AST) -> Any:
         return _expr_text(node)
 
 
+def _static_path_expression(node: ast.AST, source_path: str) -> tuple[str, bool] | None:
+    """Evaluate common pathlib expressions without executing repository code.
+
+    The boolean marks values already rooted in the repository-relative ``__file__`` path.
+    """
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value, False
+    if isinstance(node, ast.Name) and node.id == "__file__":
+        return source_path, True
+    if isinstance(node, ast.Call):
+        func_name = _expr_text(node.func)
+        if func_name in {"str", "Path", "pathlib.Path"} and len(node.args) == 1:
+            return _static_path_expression(node.args[0], source_path)
+        if isinstance(node.func, ast.Attribute) and node.func.attr == "joinpath":
+            base = _static_path_expression(node.func.value, source_path)
+            if base is None:
+                return None
+            parts: list[str] = []
+            for arg in node.args:
+                value = _static_path_expression(arg, source_path)
+                if value is None or value[1]:
+                    return None
+                parts.append(value[0])
+            result = Path(base[0]).joinpath(*parts).as_posix()
+            return result, base[1]
+        return None
+    if isinstance(node, ast.Attribute):
+        base = _static_path_expression(node.value, source_path)
+        if base is None:
+            return None
+        path = Path(base[0])
+        if node.attr == "parent":
+            return path.parent.as_posix(), base[1]
+        if node.attr == "stem":
+            return path.stem, False
+        if node.attr == "name":
+            return path.name, False
+    return None
+
+
 def _is_main_guard(node: ast.expr) -> bool:
     if not isinstance(node, ast.Compare) or len(node.ops) != 1 or len(node.comparators) != 1:
         return False
@@ -749,5 +957,23 @@ def _is_main_guard(node: ast.expr) -> bool:
     )
 
 
-def _ignored(path: Path) -> bool:
-    return any(part in _IGNORED_PARTS for part in path.parts)
+def _nested_repository_roots(root: Path, ignored_parts: set[str]) -> list[Path]:
+    roots: list[Path] = []
+    for marker in root.rglob(".git"):
+        candidate = marker.parent
+        if candidate == root or any(part in ignored_parts for part in candidate.parts):
+            continue
+        if any(parent in candidate.parents for parent in roots):
+            continue
+        roots.append(candidate)
+    return sorted(roots)
+
+
+def _ignored(
+    path: Path,
+    ignored_parts: set[str],
+    nested_roots: list[Path],
+) -> bool:
+    if any(part in ignored_parts for part in path.parts):
+        return True
+    return any(root in path.parents for root in nested_roots)

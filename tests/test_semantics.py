@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from time import perf_counter
 
 from archtrace.ir import (
     ArchEdge,
@@ -263,3 +264,20 @@ def test_repository_context_collects_readme_then_docs_deterministically(
         "docs/architecture.md",
     ]
     assert "Vision policy" in snippets[0].text
+
+
+def test_large_semantic_recovery_remains_bounded() -> None:
+    size = 4000
+    source = _graph(
+        [
+            (f"vision_{index}", f"VisionEncoder{index}", NodeKind.MODULE)
+            for index in range(size)
+        ],
+        [(f"vision_{index}", f"vision_{index + 1}") for index in range(size - 1)],
+    )
+    started = perf_counter()
+    recovered = recover_semantics(source)
+    elapsed = perf_counter() - started
+    semantic_nodes = [node for node in recovered.nodes if node.level == NodeLevel.SEMANTIC]
+    assert len(semantic_nodes) == size
+    assert elapsed < 8.0

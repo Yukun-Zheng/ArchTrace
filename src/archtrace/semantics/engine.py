@@ -109,7 +109,9 @@ def recover_semantics(
     node_by_id = graph_index.node_by_id
     modalities = _propagate_modalities(mechanical_nodes, graph_index.flow_out)
     hypotheses = {
-        node.id: _infer_node_hypotheses(node, modalities, graph_index.flow_in)
+        node.id: _infer_node_hypotheses(
+            node, modalities, graph_index.flow_in
+        )
         for node in mechanical_nodes
     }
 

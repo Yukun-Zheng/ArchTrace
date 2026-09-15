@@ -2,6 +2,8 @@
 
 > **From research code to a source-grounded, explorable model architecture.**
 
+**Live explorer:** https://archtrace.vercel.app
+
 ArchTrace is an open-source system for reconstructing, tracing, understanding, and visualizing machine-learning architectures directly from research repositories.
 
 The long-term goal is deliberately broader than a model visualizer. ArchTrace aims to unify **repository understanding, static analysis, runtime tracing, tensor/data-flow reconstruction, semantic architecture recovery, source-code grounding, interactive exploration, cross-model comparison, and publication-quality figure generation** in one system.
@@ -329,9 +331,9 @@ The goal is **not** to vendor unrelated projects into one monorepo. The goal is 
 
 ## Status
 
-ArchTrace is at **M0: architecture/specification**.
+ArchTrace is in **product alpha**. M0–M3 are implemented: ATIR v0.2, PyTorch runtime tracing, repository-scale static analysis, evidence-grounded semantic recovery, and the hierarchical Web explorer are all integrated on `main`.
 
-The repository is intentionally being built from the IR outward so that later tracing, semantic analysis, and visualization layers remain mutually consistent.
+The active phase is **M3.5: real-world benchmark and torture testing**. Pinned public research repositories are analyzed without importing target code, and failures are recorded as structured uncertainty rather than hidden behind successful-looking diagrams. The initial matrix covers DP3, Diffusion Policy, openpi/π0, RDT, V-JEPA2, and RoboTwin. See `docs/BENCHMARK.md` for methodology and `docs/PRODUCT.md` for the live product workflow.
 
 ## License
 
