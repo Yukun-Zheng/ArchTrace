@@ -12,8 +12,12 @@ from rich.table import Table
 
 from archtrace.benchmark import (
     BenchmarkResult,
+    StaticBenchmarkMetrics,
     load_benchmark_manifest,
+    load_runtime_spec,
     render_markdown_report,
+    run_hybrid_benchmark,
+    run_runtime_benchmark,
     run_static_benchmark,
     write_benchmark_result,
 )
@@ -187,12 +191,70 @@ def benchmark_static(
         f"[green]{result.status.value}[/green] {case.id} -> {destination} "
         f"({result.elapsed_seconds:.2f}s)"
     )
-    if result.metrics is not None:
+    if isinstance(result.metrics, StaticBenchmarkMetrics):
         console.print(
             f"parse={result.metrics.parse_success_rate:.1%} "
             f"calls={result.metrics.call_resolution_rate:.1%} "
             f"semantic={result.metrics.semantic_coverage:.1%}"
         )
+
+
+@benchmark_app.command("runtime")
+def benchmark_runtime(
+    manifest: Annotated[Path, typer.Argument(help="Benchmark manifest TOML path.")],
+    case_id: Annotated[str, typer.Argument(help="Pinned benchmark case ID.")],
+    repository: Annotated[Path, typer.Argument(help="Checked-out repository path.")],
+    output: Annotated[
+        Path | None, typer.Option("--output", "-o", help="Result JSON output path.")
+    ] = None,
+    allow_revision_mismatch: Annotated[
+        bool, typer.Option("--allow-revision-mismatch")
+    ] = False,
+) -> None:
+    """Execute a declarative runtime target and capture runtime ATIR."""
+    loaded = load_benchmark_manifest(manifest)
+    case = loaded.case(case_id)
+    if case.runtime_spec is None:
+        raise typer.BadParameter(f"benchmark case {case_id!r} has no runtime_spec")
+    spec = load_runtime_spec(manifest.parent / case.runtime_spec)
+    result = run_runtime_benchmark(
+        case, repository, spec, allow_revision_mismatch=allow_revision_mismatch
+    )
+    destination = output or Path("benchmarks/results") / f"{case.id}.runtime.json"
+    write_benchmark_result(result, destination)
+    console.print(
+        f"[green]{result.status.value}[/green] {case.id} runtime -> {destination} "
+        f"({result.elapsed_seconds:.2f}s)"
+    )
+
+
+@benchmark_app.command("hybrid")
+def benchmark_hybrid(
+    manifest: Annotated[Path, typer.Argument(help="Benchmark manifest TOML path.")],
+    case_id: Annotated[str, typer.Argument(help="Pinned benchmark case ID.")],
+    repository: Annotated[Path, typer.Argument(help="Checked-out repository path.")],
+    output: Annotated[
+        Path | None, typer.Option("--output", "-o", help="Result JSON output path.")
+    ] = None,
+    allow_revision_mismatch: Annotated[
+        bool, typer.Option("--allow-revision-mismatch")
+    ] = False,
+) -> None:
+    """Run static + runtime analysis and measure source-grounded reconciliation."""
+    loaded = load_benchmark_manifest(manifest)
+    case = loaded.case(case_id)
+    if case.runtime_spec is None:
+        raise typer.BadParameter(f"benchmark case {case_id!r} has no runtime_spec")
+    spec = load_runtime_spec(manifest.parent / case.runtime_spec)
+    result = run_hybrid_benchmark(
+        case, repository, spec, allow_revision_mismatch=allow_revision_mismatch
+    )
+    destination = output or Path("benchmarks/results") / f"{case.id}.hybrid.json"
+    write_benchmark_result(result, destination)
+    console.print(
+        f"[green]{result.status.value}[/green] {case.id} hybrid -> {destination} "
+        f"({result.elapsed_seconds:.2f}s)"
+    )
 
 
 @benchmark_app.command("report")

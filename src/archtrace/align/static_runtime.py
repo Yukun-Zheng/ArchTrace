@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from pathlib import PurePosixPath
 from typing import Any, TypeVar
 
@@ -52,9 +53,13 @@ def reconcile_static_runtime(
         for node in runtime_graph.nodes
         if node.identity_kind == IdentityKind.DEFINITION and node.source
     ]
+    static_path_index, static_basename_index = _build_source_index(static_defs)
     alignments: list[dict[str, Any]] = []
     for runtime_node in runtime_defs:
-        matched = _best_match(runtime_node, static_defs)
+        candidates = _source_candidates(
+            runtime_node, static_path_index, static_basename_index
+        )
+        matched = _best_match(runtime_node, candidates)
         if matched is None:
             continue
         static_node, score = matched
@@ -157,6 +162,46 @@ def _coverage_record(
         evidence_ids=[evidence_id],
         metadata={"runtime_definition_id": runtime_node.id},
     )
+
+
+def _build_source_index(
+    nodes: list[ArchNode],
+) -> tuple[dict[str, list[ArchNode]], dict[str, list[ArchNode]]]:
+    by_path: dict[str, list[ArchNode]] = defaultdict(list)
+    by_basename: dict[str, list[ArchNode]] = defaultdict(list)
+    for node in nodes:
+        seen_paths: set[str] = set()
+        seen_basenames: set[str] = set()
+        for span in node.source:
+            normalized = _normalize(span.path)
+            if normalized not in seen_paths:
+                by_path[normalized].append(node)
+                seen_paths.add(normalized)
+            basename = PurePosixPath(normalized).name
+            if basename not in seen_basenames:
+                by_basename[basename].append(node)
+                seen_basenames.add(basename)
+    return dict(by_path), dict(by_basename)
+
+
+def _source_candidates(
+    runtime_node: ArchNode,
+    by_path: dict[str, list[ArchNode]],
+    by_basename: dict[str, list[ArchNode]],
+) -> list[ArchNode]:
+    candidates: dict[str, ArchNode] = {}
+    for span in runtime_node.source:
+        normalized = _normalize(span.path)
+        parts = PurePosixPath(normalized).parts
+        for index in range(len(parts)):
+            suffix = PurePosixPath(*parts[index:]).as_posix()
+            for node in by_path.get(suffix, []):
+                candidates[node.id] = node
+        basename = PurePosixPath(normalized).name
+        for node in by_basename.get(basename, []):
+            if any(_path_matches(span.path, static_span.path) for static_span in node.source):
+                candidates[node.id] = node
+    return [candidates[node_id] for node_id in sorted(candidates)]
 
 
 def _best_match(

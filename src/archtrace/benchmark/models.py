@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -39,6 +40,14 @@ class FailureCategory(StrEnum):
     CONFIG_UNRESOLVED = "config_unresolved"
     SUBMODULE_UNMATERIALIZED = "submodule_unmaterialized"
     ANALYSIS_EXCEPTION = "analysis_exception"
+    RUNTIME_SPEC_INVALID = "runtime_spec_invalid"
+    RUNTIME_UNSUPPORTED_FRAMEWORK = "runtime_unsupported_framework"
+    RUNTIME_DEPENDENCY_MISSING = "runtime_dependency_missing"
+    RUNTIME_IMPORT_FAILURE = "runtime_import_failure"
+    RUNTIME_CONSTRUCTION_FAILURE = "runtime_construction_failure"
+    RUNTIME_EXECUTION_FAILURE = "runtime_execution_failure"
+    RUNTIME_OUTPUT_MISMATCH = "runtime_output_mismatch"
+    HYBRID_RECONCILIATION_FAILURE = "hybrid_reconciliation_failure"
 
 
 class BenchmarkCase(BaseModel):
@@ -50,6 +59,7 @@ class BenchmarkCase(BaseModel):
     modes: list[BenchmarkMode] = Field(default_factory=lambda: [BenchmarkMode.STATIC])
     tags: list[str] = Field(default_factory=list)
     notes: str | None = None
+    runtime_spec: str | None = None
 
 
 class BenchmarkManifest(BaseModel):
@@ -71,7 +81,37 @@ class BenchmarkFailure(BaseModel):
     examples: list[str] = Field(default_factory=list)
 
 
+class RuntimeValueSpec(BaseModel):
+    kind: Literal["tensor", "scalar"] = "tensor"
+    shape: list[int] = Field(default_factory=list)
+    dtype: str = "float32"
+    generator: Literal["randn", "zeros", "ones", "values"] = "randn"
+    values: list[int | float | bool] = Field(default_factory=list)
+    value: int | float | bool | str | None = None
+    requires_grad: bool = False
+
+
+class RuntimeTargetSpec(BaseModel):
+    schema_version: str = "1"
+    framework: str = "pytorch"
+    import_root: str = "."
+    module: str
+    symbol: str
+    constructor_kwargs: dict[str, Any] = Field(default_factory=dict)
+    args: list[RuntimeValueSpec] = Field(default_factory=list)
+    kwargs: dict[str, RuntimeValueSpec] = Field(default_factory=dict)
+    required_imports: list[str] = Field(default_factory=list)
+    seed: int = 7
+    eval_mode: bool = True
+    no_grad: bool = True
+    capture_operators: bool = True
+    capture_fx: bool = False
+    capture_export: bool = False
+    expected_output_shapes: list[list[int]] = Field(default_factory=list)
+
+
 class StaticBenchmarkMetrics(BaseModel):
+    metric_kind: Literal["static"] = "static"
     python_files: int
     parse_errors: int
     parse_success_rate: float
@@ -99,6 +139,48 @@ class StaticBenchmarkMetrics(BaseModel):
     unmaterialized_submodules: int = 0
 
 
+class RuntimeBenchmarkMetrics(BaseModel):
+    metric_kind: Literal["runtime"] = "runtime"
+    trace_seconds: float
+    runtime_nodes: int
+    runtime_edges: int
+    definitions: int
+    module_definitions: int
+    operator_definitions: int
+    occurrences: int
+    values: int
+    states: int
+    target_source_definitions: int
+    tensor_nodes: int
+    tensor_spec_nodes: int
+    tensor_spec_coverage: float
+    consumes_edges: int
+    produces_edges: int
+    derived_from_edges: int
+    parameter_count: int
+    output_tensor_count: int
+
+
+class HybridBenchmarkMetrics(BaseModel):
+    metric_kind: Literal["hybrid"] = "hybrid"
+    reconciliation_seconds: float
+    static_nodes: int
+    static_edges: int
+    runtime_nodes: int
+    runtime_edges: int
+    merged_nodes: int
+    merged_edges: int
+    target_runtime_definitions: int
+    aligned_target_runtime_definitions: int
+    target_alignment_rate: float
+    source_alignments: int
+    alias_edges: int
+    coverage_records: int
+    always_observed: int
+    sometimes_observed: int
+    static_reachable_unobserved: int
+
+
 class BenchmarkResult(BaseModel):
     schema_version: str = "1"
     case_id: str
@@ -110,6 +192,8 @@ class BenchmarkResult(BaseModel):
     mode: BenchmarkMode
     status: BenchmarkStatus
     elapsed_seconds: float
-    metrics: StaticBenchmarkMetrics | None = None
+    metrics: (
+        StaticBenchmarkMetrics | RuntimeBenchmarkMetrics | HybridBenchmarkMetrics | None
+    ) = None
     failures: list[BenchmarkFailure] = Field(default_factory=list)
     metadata: dict[str, object] = Field(default_factory=dict)

@@ -9,6 +9,7 @@ tier = "research"
 modes = ["static", "runtime", "hybrid"]
 tags = ["robotics", "diffusion", "point-cloud", "policy"]
 notes = "DP3 / 3D Diffusion Policy. First real-world torture target."
+runtime_spec = "runtime/dp3-conditional-unet.json"
 
 [[case]]
 id = "diffusion-policy"
@@ -19,6 +20,7 @@ tier = "research"
 modes = ["static", "runtime", "hybrid"]
 tags = ["robotics", "diffusion", "vision", "policy"]
 notes = "Canonical Diffusion Policy implementation."
+runtime_spec = "runtime/diffusion-policy-conditional-unet.json"
 
 [[case]]
 id = "openpi"

@@ -129,3 +129,43 @@ def test_reconciliation_rejects_conflicting_global_ids(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="cross-graph record id collision"):
         reconcile_static_runtime(static, runtime)
+
+
+def test_reconciliation_disambiguates_same_basename_by_path_suffix(tmp_path: Path) -> None:
+    left = tmp_path / "left"
+    right = tmp_path / "right"
+    left.mkdir()
+    right.mkdir()
+    (left / "model.py").write_text(
+        "class Left:\n    def forward(self, x):\n        return x\n", encoding="utf-8"
+    )
+    (right / "model.py").write_text(
+        "class Right:\n    def forward(self, x):\n        return x\n", encoding="utf-8"
+    )
+    static = repository_index_to_atir(index_repository(tmp_path))
+    runtime = ArchTraceIR(
+        project=ProjectInfo(name=tmp_path.name),
+        nodes=[
+            ArchNode(
+                id="runtime.right",
+                level=NodeLevel.MODULE,
+                kind=NodeKind.MODULE,
+                identity_kind=IdentityKind.DEFINITION,
+                label="Right",
+                role="pytorch_module_definition",
+                source=[
+                    SourceSpan(
+                        path=f"/workspace/{tmp_path.name}/right/model.py",
+                        start_line=2,
+                        end_line=3,
+                        symbol="Right.forward",
+                    )
+                ],
+            )
+        ],
+        runs=[TraceRun(id="run.0", framework="pytorch")],
+    )
+    merged = reconcile_static_runtime(static, runtime)
+    alias = next(edge for edge in merged.edges if edge.kind == EdgeKind.ALIAS)
+    target = next(node for node in static.nodes if node.id == alias.target)
+    assert target.source[0].path == "right/model.py"
