@@ -1,0 +1,82 @@
+{
+  "schema_version": "1",
+  "case_id": "openpi",
+  "repository": "https://github.com/Physical-Intelligence/openpi.git",
+  "expected_revision": "215abfb217dbac7d5f1273282331b9b1866c0479",
+  "actual_revision": "215abfb217dbac7d5f1273282331b9b1866c0479",
+  "analyzer_revision": "56b47d5bc1073380fec763254fd132d579ed50fd",
+  "analyzer_dirty": false,
+  "mode": "runtime",
+  "status": "completed",
+  "elapsed_seconds": 66.61594939907081,
+  "metrics": {
+    "metric_kind": "runtime",
+    "trace_seconds": 12.63679927191697,
+    "runtime_nodes": 17675,
+    "runtime_edges": 28217,
+    "definitions": 3597,
+    "module_definitions": 823,
+    "operator_definitions": 2774,
+    "occurrences": 8442,
+    "values": 4856,
+    "states": 780,
+    "target_source_definitions": 267,
+    "target_operator_source_definitions": 969,
+    "tensor_nodes": 5636,
+    "tensor_spec_nodes": 5636,
+    "tensor_spec_coverage": 1.0,
+    "consumes_edges": 10910,
+    "produces_edges": 8866,
+    "derived_from_edges": 0,
+    "parameter_count": 3501298424,
+    "output_tensor_count": 1
+  },
+  "failures": [],
+  "metadata": {
+    "environment": {
+      "packages": {
+        "augmax": "0.4.1",
+        "beartype": "0.19.0",
+        "chex": "0.1.90",
+        "dm-tree": "0.1.10",
+        "einops": "0.8.2",
+        "equinox": "0.13.8",
+        "flax": "0.10.2",
+        "jax": "0.5.3",
+        "jaxtyping": "0.2.36",
+        "ml-dtypes": "0.4.1",
+        "numpy": "1.26.4",
+        "safetensors": "0.8.0",
+        "tensorstore": "0.1.74",
+        "torch": "2.7.1+cpu",
+        "torchvision": "0.22.1+cpu",
+        "transformers": "4.53.2",
+        "treescope": "0.1.10"
+      },
+      "overlays": [
+        {
+          "module": "transformers",
+          "repository_path": "src/openpi/models_pytorch/transformers_replace",
+          "matched_files": 5,
+          "private_copy_verified": true
+        }
+      ]
+    },
+    "stage_seconds": {
+      "import": 6.911282548913732,
+      "construction": 41.75124500878155,
+      "trace": 12.63679927191697
+    },
+    "output_shapes": [
+      [
+        1,
+        4,
+        8
+      ]
+    ],
+    "runtime_backend": "pytorch_module_hooks",
+    "operator_dispatch": true,
+    "structured_captures": [],
+    "runtime_source_overlay_remaps": 8186
+  }
+}

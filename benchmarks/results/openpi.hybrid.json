@@ -1,0 +1,81 @@
+{
+  "schema_version": "1",
+  "case_id": "openpi",
+  "repository": "https://github.com/Physical-Intelligence/openpi.git",
+  "expected_revision": "215abfb217dbac7d5f1273282331b9b1866c0479",
+  "actual_revision": "215abfb217dbac7d5f1273282331b9b1866c0479",
+  "analyzer_revision": "56b47d5bc1073380fec763254fd132d579ed50fd",
+  "analyzer_dirty": false,
+  "mode": "hybrid",
+  "status": "completed",
+  "elapsed_seconds": 85.87788106896915,
+  "metrics": {
+    "metric_kind": "hybrid",
+    "reconciliation_seconds": 8.077178769977763,
+    "static_nodes": 5258,
+    "static_edges": 7461,
+    "runtime_nodes": 17681,
+    "runtime_edges": 28217,
+    "merged_nodes": 22939,
+    "merged_edges": 36495,
+    "target_runtime_definitions": 267,
+    "aligned_target_runtime_definitions": 267,
+    "target_alignment_rate": 1.0,
+    "target_operator_definitions": 969,
+    "source_alignments": 817,
+    "alias_edges": 817,
+    "coverage_records": 817,
+    "always_observed": 744,
+    "sometimes_observed": 0,
+    "static_reachable_unobserved": 73
+  },
+  "failures": [],
+  "metadata": {
+    "environment": {
+      "packages": {
+        "augmax": "0.4.1",
+        "beartype": "0.19.0",
+        "chex": "0.1.90",
+        "dm-tree": "0.1.10",
+        "einops": "0.8.2",
+        "equinox": "0.13.8",
+        "flax": "0.10.2",
+        "jax": "0.5.3",
+        "jaxtyping": "0.2.36",
+        "ml-dtypes": "0.4.1",
+        "numpy": "1.26.4",
+        "safetensors": "0.8.0",
+        "tensorstore": "0.1.74",
+        "torch": "2.7.1+cpu",
+        "torchvision": "0.22.1+cpu",
+        "transformers": "4.53.2",
+        "treescope": "0.1.10"
+      },
+      "overlays": [
+        {
+          "module": "transformers",
+          "repository_path": "src/openpi/models_pytorch/transformers_replace",
+          "matched_files": 5,
+          "private_copy_verified": true
+        }
+      ]
+    },
+    "stage_seconds": {
+      "static": 0.6912618270143867,
+      "import": 7.709631404140964,
+      "construction": 47.28779249708168,
+      "trace": 15.714770429069176,
+      "reconciliation": 8.077178769977763
+    },
+    "output_shapes": [
+      [
+        1,
+        4,
+        8
+      ]
+    ],
+    "runtime_source_overlay_remaps": 8186,
+    "source_alignment_count": 817,
+    "unaligned_target_definitions": []
+  }
+}
