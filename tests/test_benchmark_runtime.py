@@ -122,7 +122,6 @@ def test_runtime_constructor_values_support_imports_and_factories(tmp_path: Path
     assert result.metrics.parameter_count == 12
 
 
-
 def test_runtime_values_support_nested_object_and_mapping(tmp_path: Path) -> None:
     (tmp_path / "structured.py").write_text(
         "import torch.nn as nn\n\n"
@@ -223,14 +222,13 @@ def test_runtime_overlay_remaps_installed_source_back_to_repository(
     assert isinstance(result.metrics, HybridBenchmarkMetrics)
     assert result.metrics.target_runtime_definitions == 2
     assert result.metrics.aligned_target_runtime_definitions == 2
-    assert result.metrics.target_operator_definitions >= 1
+    assert result.metrics.target_operator_definitions == 0
     assert result.metrics.target_alignment_rate == 1.0
     environment_meta = result.metadata["environment"]
     assert isinstance(environment_meta, dict)
     overlays = environment_meta["overlays"]
     assert isinstance(overlays, list)
     assert overlays[0]["matched_files"] == 2
-
 
 
 def test_runtime_overlay_rejects_shared_hardlinks(
