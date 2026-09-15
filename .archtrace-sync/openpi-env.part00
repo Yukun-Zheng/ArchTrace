@@ -1,0 +1,250 @@
+From d66f3c53c5d8215031247fdc02ee97149c48eead Mon Sep 17 00:00:00 2001
+From: Yukun Zheng <zhengyukun2005@gmail.com>
+Date: Tue, 15 Sep 2026 05:40:47 +0000
+Subject: [PATCH] M3.5: add verified runtime environments and full pi0 target
+
+---
+ benchmarks/environments/openpi-pytorch.json |  81 +++++
+ benchmarks/manifest.toml                    |   2 +
+ benchmarks/runtime/openpi-pi0.json          | 189 ++++++++++++
+ docs/BENCHMARK.md                           |  11 +
+ src/archtrace/benchmark/__init__.py         |   8 +
+ src/archtrace/benchmark/models.py           |  35 ++-
+ src/archtrace/benchmark/report.py           |   4 +-
+ src/archtrace/benchmark/runtime.py          | 315 +++++++++++++++++++-
+ src/archtrace/cli.py                        |  23 +-
+ tests/test_benchmark_runtime.py             | 144 +++++++++
+ 10 files changed, 796 insertions(+), 16 deletions(-)
+ create mode 100644 benchmarks/environments/openpi-pytorch.json
+ create mode 100644 benchmarks/runtime/openpi-pi0.json
+
+diff --git a/benchmarks/environments/openpi-pytorch.json b/benchmarks/environments/openpi-pytorch.json
+new file mode 100644
+index 0000000..d010f9a
+--- /dev/null
++++ b/benchmarks/environments/openpi-pytorch.json
+@@ -0,0 +1,81 @@
++{
++  "schema_version": "1",
++  "python": "3.11",
++  "packages": [
++    {
++      "distribution": "torch",
++      "version": "2.7.1"
++    },
++    {
++      "distribution": "torchvision",
++      "version": "0.22.1"
++    },
++    {
++      "distribution": "transformers",
++      "version": "4.53.2"
++    },
++    {
++      "distribution": "numpy",
++      "version": "1.26.4"
++    },
++    {
++      "distribution": "jax",
++      "version": "0.5.3"
++    },
++    {
++      "distribution": "flax",
++      "version": "0.10.2"
++    },
++    {
++      "distribution": "ml-dtypes",
++      "version": "0.4.1"
++    },
++    {
++      "distribution": "tensorstore",
++      "version": "0.1.74"
++    },
++    {
++      "distribution": "einops",
++      "version": "0.8.2"
++    },
++    {
++      "distribution": "augmax",
++      "version": "0.4.1"
++    },
++    {
++      "distribution": "dm-tree",
++      "version": "0.1.10"
++    },
++    {
++      "distribution": "jaxtyping",
++      "version": "0.2.36"
++    },
++    {
++      "distribution": "beartype",
++      "version": "0.19.0"
++    },
++    {
++      "distribution": "chex",
++      "version": "0.1.90"
++    },
++    {
++      "distribution": "equinox",
++      "version": "0.13.8"
++    },
++    {
++      "distribution": "treescope",
++      "version": "0.1.10"
++    },
++    {
++      "distribution": "safetensors",
++      "version": "0.8.0"
++    }
++  ],
++  "overlays": [
++    {
++      "repository_path": "src/openpi/models_pytorch/transformers_replace",
++      "module": "transformers",
++      "require_private_copy": true
++    }
++  ]
++}
+diff --git a/benchmarks/manifest.toml b/benchmarks/manifest.toml
+index b57dd1f..d4dc085 100644
+--- a/benchmarks/manifest.toml
++++ b/benchmarks/manifest.toml
+@@ -31,6 +31,8 @@ tier = "research"
+ modes = ["static", "runtime", "hybrid"]
+ tags = ["robotics", "vla", "pi0", "multimodal"]
+ notes = "Physical Intelligence openpi; later-stage VLA stress target."
++runtime_spec = "runtime/openpi-pi0.json"
++runtime_environment = "environments/openpi-pytorch.json"
+ 
+ [[case]]
+ id = "rdt"
+diff --git a/benchmarks/runtime/openpi-pi0.json b/benchmarks/runtime/openpi-pi0.json
+new file mode 100644
+index 0000000..c80bd11
+--- /dev/null
++++ b/benchmarks/runtime/openpi-pi0.json
+@@ -0,0 +1,189 @@
++{
++  "schema_version": "1",
++  "framework": "pytorch",
++  "import_root": "src",
++  "module": "openpi.models_pytorch.pi0_pytorch",
++  "symbol": "PI0Pytorch",
++  "constructor_kwargs": {
++    "config": {
++      "$kind": "construct",
++      "module": "openpi.models.pi0_config",
++      "symbol": "Pi0Config",
++      "kwargs": {
++        "dtype": "float32",
++        "paligemma_variant": "gemma_2b",
++        "action_expert_variant": "gemma_300m",
++        "action_dim": 8,
++        "action_horizon": 4,
++        "max_token_len": 8,
++        "pytorch_compile_mode": null
++      }
++    }
++  },
++  "args": [
++    {
++      "kind": "object",
++      "module": "types",
++      "symbol": "SimpleNamespace",
++      "constructor_kwargs": {
++        "images": {
++          "kind": "mapping",
++          "items": {
++            "base_0_rgb": {
++              "kind": "tensor",
++              "shape": [
++                1,
++                3,
++                224,
++                224
++              ],
++              "dtype": "float32",
++              "generator": "zeros"
++            },
++            "left_wrist_0_rgb": {
++              "kind": "tensor",
++              "shape": [
++                1,
++                3,
++                224,
++                224
++              ],
++              "dtype": "float32",
++              "generator": "zeros"
++            },
++            "right_wrist_0_rgb": {
++              "kind": "tensor",
++              "shape": [
++                1,
++                3,
++                224,
++                224
++              ],
++              "dtype": "float32",
++              "generator": "zeros"
++            }
++          }
++        },
++        "image_masks": {
++          "kind": "mapping",
++          "items": {
++            "base_0_rgb": {
++              "kind": "tensor",
++              "shape": [
++                1
++              ],
++              "dtype": "bool",
++              "generator": "ones"
++            },
++            "left_wrist_0_rgb": {
++              "kind": "tensor",
++              "shape": [
++                1
++              ],
++              "dtype": "bool",
++              "generator": "ones"
++            },
++            "right_wrist_0_rgb": {
++              "kind": "tensor",
++              "shape": [
++                1
++              ],
++              "dtype": "bool",
++              "generator": "ones"
++            }
++          }
++        },
++        "state": {
++          "kind": "tensor",
++          "shape": [
++            1,
++            8
++          ],
++          "dtype": "float32",
++          "generator": "zeros"
++        },
++        "tokenized_prompt": {
++          "kind": "tensor",
++          "shape": [
++            1,
++            8
++          ],
++          "dtype": "int64",
++          "generator": "zeros"
++        },
++        "tokenized_prompt_mask": {
++          "kind": "tensor",
++          "shape": [
++            1,
++            8
++          ],
++          "dtype": "bool",
++          "generator": "ones"
++        },
++        "token_ar_mask": {
++          "kind": "scalar",
