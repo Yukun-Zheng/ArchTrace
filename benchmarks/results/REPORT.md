@@ -18,6 +18,7 @@
 | dp3 | completed | 1.74s | 29 | 891 | 136 | 100.0% |
 | diffusion-policy | completed | 1.70s | 29 | 803 | 112 | 100.0% |
 | rdt | completed | 0.72s | 8 | 802 | 162 | 100.0% |
+| vjepa2 | completed | 0.36s | 8 | 282 | 47 | 100.0% |
 
 ## Hybrid
 
@@ -26,6 +27,7 @@
 | dp3 | completed | 0.25s | 100.0% | 29 | 5558 |
 | diffusion-policy | completed | 1.19s | 100.0% | 29 | 14457 |
 | rdt | completed | 0.81s | 100.0% | 8 | 6562 |
+| vjepa2 | completed | 0.94s | 100.0% | 8 | 11986 |
 
 ## Failure taxonomy
 
@@ -47,6 +49,8 @@
 - **dp3 (runtime)**: no recorded warnings/errors.
 - **diffusion-policy (runtime)**: no recorded warnings/errors.
 - **rdt (runtime)**: no recorded warnings/errors.
+- **vjepa2 (runtime)**: no recorded warnings/errors.
 - **dp3 (hybrid)**: no recorded warnings/errors.
 - **diffusion-policy (hybrid)**: no recorded warnings/errors.
 - **rdt (hybrid)**: no recorded warnings/errors.
+- **vjepa2 (hybrid)**: no recorded warnings/errors.
