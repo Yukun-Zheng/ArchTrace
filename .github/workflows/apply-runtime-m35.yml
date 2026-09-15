@@ -6,7 +6,7 @@ permissions:
   contents: write
 jobs:
   apply:
-    if: github.event.head_commit.message == 'M3.5 migration: apply verified runtime patch'
+    if: "github.event.head_commit.message == 'M3.5 migration: apply verified runtime patch'"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
