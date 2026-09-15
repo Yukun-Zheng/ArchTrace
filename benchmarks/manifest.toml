@@ -41,6 +41,7 @@ tier = "research"
 modes = ["static", "runtime", "hybrid"]
 tags = ["robotics", "diffusion", "transformer", "multimodal"]
 notes = "RDT stress target for cross-attention and diffusion transformer structure."
+runtime_spec = "runtime/rdt-mini.json"
 
 [[case]]
 id = "vjepa2"

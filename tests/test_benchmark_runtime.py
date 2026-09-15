@@ -75,3 +75,43 @@ def test_runtime_benchmark_reports_missing_dependency(tmp_path: Path) -> None:
     result = run_runtime_benchmark(case, tmp_path, spec)
     assert result.status == BenchmarkStatus.FAILED
     assert result.failures[-1].category == FailureCategory.RUNTIME_DEPENDENCY_MISSING
+
+
+def test_runtime_constructor_values_support_imports_and_factories(tmp_path: Path) -> None:
+    (tmp_path / "configured_model.py").write_text(
+        "from dataclasses import dataclass\n"
+        "import torch\n"
+        "import torch.nn as nn\n\n"
+        "@dataclass\n"
+        "class TinyConfig:\n"
+        "    dim: int\n\n"
+        "class TinyConfigured(nn.Module):\n"
+        "    def __init__(self, config, dtype):\n"
+        "        super().__init__()\n"
+        "        self.proj = nn.Linear(config.dim, config.dim, dtype=dtype)\n\n"
+        "    def forward(self, x):\n"
+        "        return self.proj(x)\n",
+        encoding="utf-8",
+    )
+    case = BenchmarkCase(id="configured", repository="local", revision="1234567")
+    spec = RuntimeTargetSpec(
+        module="configured_model",
+        symbol="TinyConfigured",
+        constructor_kwargs={
+            "config": {
+                "$kind": "construct",
+                "module": "configured_model",
+                "symbol": "TinyConfig",
+                "kwargs": {"dim": 3},
+            },
+            "dtype": {"$kind": "import", "module": "torch", "symbol": "float32"},
+        },
+        args=[RuntimeValueSpec(shape=[2, 3], dtype="float32", generator="randn")],
+        expected_output_shapes=[[2, 3]],
+        capture_fx=False,
+        capture_export=False,
+    )
+    result = run_runtime_benchmark(case, tmp_path, spec)
+    assert result.status == BenchmarkStatus.COMPLETED
+    assert isinstance(result.metrics, RuntimeBenchmarkMetrics)
+    assert result.metrics.parameter_count == 12

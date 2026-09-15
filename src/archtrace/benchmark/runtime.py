@@ -135,9 +135,7 @@ def run_hybrid_benchmark(
 ) -> BenchmarkResult:
     started = perf_counter()
     root = Path(repository).resolve()
-    preflight = _benchmark_preflight(
-        case, root, allow_revision_mismatch, mode=BenchmarkMode.HYBRID
-    )
+    preflight = _benchmark_preflight(case, root, allow_revision_mismatch, mode=BenchmarkMode.HYBRID)
     if isinstance(preflight, BenchmarkResult):
         return preflight
     actual_revision, failures = preflight
@@ -242,9 +240,7 @@ def _execute_pytorch_target(
             f"unsupported runtime framework: {spec.framework}",
         )
     missing = [
-        name
-        for name in ["torch", *spec.required_imports]
-        if importlib.util.find_spec(name) is None
+        name for name in ["torch", *spec.required_imports] if importlib.util.find_spec(name) is None
     ]
     if missing:
         raise _RuntimeBenchmarkError(
@@ -281,7 +277,11 @@ def _execute_pytorch_target(
         try:
             torch = importlib.import_module("torch")
             torch.manual_seed(spec.seed)
-            model = target(**spec.constructor_kwargs)
+            constructor_kwargs = {
+                key: _materialize_constructor_value(value)
+                for key, value in spec.constructor_kwargs.items()
+            }
+            model = target(**constructor_kwargs)
         except Exception as exc:
             raise _RuntimeBenchmarkError(
                 FailureCategory.RUNTIME_CONSTRUCTION_FAILURE,
@@ -293,9 +293,7 @@ def _execute_pytorch_target(
             if spec.eval_mode and hasattr(model, "eval"):
                 model.eval()
             args = tuple(_materialize_value(item, torch) for item in spec.args)
-            kwargs = {
-                key: _materialize_value(item, torch) for key, item in spec.kwargs.items()
-            }
+            kwargs = {key: _materialize_value(item, torch) for key, item in spec.kwargs.items()}
             parameter_count = sum(int(parameter.numel()) for parameter in model.parameters())
             trace_started = perf_counter()
             grad_context = torch.no_grad() if spec.no_grad else nullcontext()
@@ -335,6 +333,71 @@ def _execute_pytorch_target(
                 "trace": trace_seconds,
             },
         )
+
+
+def _materialize_constructor_value(value: Any) -> Any:
+    """Materialize declarative constructor values without repository-specific code.
+
+    Two reserved object forms are supported recursively:
+    ``{"$kind": "import", "module": "torch", "symbol": "float32"}``
+    returns an imported object, while ``{"$kind": "construct", ...}`` invokes a
+    declared factory/class with recursively materialized args and kwargs.
+    """
+    if isinstance(value, list):
+        return [_materialize_constructor_value(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+
+    kind = value.get("$kind")
+    if kind is None:
+        return {key: _materialize_constructor_value(item) for key, item in value.items()}
+    if kind not in {"import", "construct"}:
+        raise _RuntimeBenchmarkError(
+            FailureCategory.RUNTIME_SPEC_INVALID,
+            f"unknown constructor value kind: {kind!r}",
+        )
+
+    module_name = value.get("module")
+    symbol_name = value.get("symbol")
+    if not isinstance(module_name, str) or not isinstance(symbol_name, str):
+        raise _RuntimeBenchmarkError(
+            FailureCategory.RUNTIME_SPEC_INVALID,
+            "constructor import/construct values require string module and symbol",
+        )
+    try:
+        module = importlib.import_module(module_name)
+        target = _resolve_symbol(module, symbol_name)
+    except (ImportError, AttributeError) as exc:
+        raise _RuntimeBenchmarkError(
+            FailureCategory.RUNTIME_SPEC_INVALID,
+            f"cannot materialize {module_name}.{symbol_name}: {type(exc).__name__}: {exc}",
+        ) from exc
+    if kind == "import":
+        return target
+
+    raw_args = value.get("args", [])
+    raw_kwargs = value.get("kwargs", {})
+    if not isinstance(raw_args, list) or not isinstance(raw_kwargs, dict):
+        raise _RuntimeBenchmarkError(
+            FailureCategory.RUNTIME_SPEC_INVALID,
+            "construct values require list args and object kwargs",
+        )
+    args = [_materialize_constructor_value(item) for item in raw_args]
+    kwargs = {key: _materialize_constructor_value(item) for key, item in raw_kwargs.items()}
+    try:
+        return target(*args, **kwargs)
+    except Exception as exc:
+        raise _RuntimeBenchmarkError(
+            FailureCategory.RUNTIME_CONSTRUCTION_FAILURE,
+            f"cannot construct {module_name}.{symbol_name}: {type(exc).__name__}: {exc}",
+        ) from exc
+
+
+def _resolve_symbol(module: Any, symbol: str) -> Any:
+    value = module
+    for part in symbol.split("."):
+        value = getattr(value, part)
+    return value
 
 
 def _materialize_value(spec: RuntimeValueSpec, torch: Any) -> Any:
