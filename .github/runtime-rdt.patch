@@ -1,0 +1,249 @@
+From 893e6d607fd5c118127a84dd6ef7ed37f23edfd9 Mon Sep 17 00:00:00 2001
+From: Yukun Zheng <zhengyukun2005@gmail.com>
+Date: Tue, 15 Sep 2026 03:28:51 +0000
+Subject: [PATCH] M3.5: support declarative constructor objects and RDT runtime
+ target
+
+---
+ benchmarks/manifest.toml           |  1 +
+ benchmarks/runtime/rdt-mini.json   | 32 ++++++++++++
+ docs/BENCHMARK.md                  |  1 +
+ src/archtrace/benchmark/runtime.py | 83 ++++++++++++++++++++++++++----
+ tests/test_benchmark_runtime.py    | 40 ++++++++++++++
+ 5 files changed, 147 insertions(+), 10 deletions(-)
+ create mode 100644 benchmarks/runtime/rdt-mini.json
+
+diff --git a/benchmarks/manifest.toml b/benchmarks/manifest.toml
+index d4e87b5..f0612de 100644
+--- a/benchmarks/manifest.toml
++++ b/benchmarks/manifest.toml
+@@ -41,6 +41,7 @@ tier = "research"
+ modes = ["static", "runtime", "hybrid"]
+ tags = ["robotics", "diffusion", "transformer", "multimodal"]
+ notes = "RDT stress target for cross-attention and diffusion transformer structure."
++runtime_spec = "runtime/rdt-mini.json"
+ 
+ [[case]]
+ id = "vjepa2"
+diff --git a/benchmarks/runtime/rdt-mini.json b/benchmarks/runtime/rdt-mini.json
+new file mode 100644
+index 0000000..69e5862
+--- /dev/null
++++ b/benchmarks/runtime/rdt-mini.json
+@@ -0,0 +1,32 @@
++{
++  "schema_version": "1",
++  "framework": "pytorch",
++  "import_root": ".",
++  "module": "models.rdt.model",
++  "symbol": "RDT",
++  "constructor_kwargs": {
++    "output_dim": 8,
++    "horizon": 4,
++    "hidden_size": 32,
++    "depth": 2,
++    "num_heads": 4,
++    "max_lang_cond_len": 5,
++    "img_cond_len": 6,
++    "dtype": {"$kind": "import", "module": "torch", "symbol": "float32"}
++  },
++  "args": [
++    {"kind": "tensor", "shape": [2, 5, 32], "dtype": "float32", "generator": "randn"},
++    {"kind": "tensor", "shape": [2], "dtype": "float32", "generator": "values", "values": [25, 30]},
++    {"kind": "tensor", "shape": [2], "dtype": "float32", "generator": "values", "values": [1, 2]},
++    {"kind": "tensor", "shape": [2, 5, 32], "dtype": "float32", "generator": "randn"},
++    {"kind": "tensor", "shape": [2, 6, 32], "dtype": "float32", "generator": "randn"}
++  ],
++  "required_imports": ["numpy", "timm", "torchvision"],
++  "seed": 7,
++  "eval_mode": true,
++  "no_grad": true,
++  "capture_operators": true,
++  "capture_fx": false,
++  "capture_export": false,
++  "expected_output_shapes": [[2, 4, 8]]
++}
+diff --git a/docs/BENCHMARK.md b/docs/BENCHMARK.md
+index b22d3c0..dca2465 100644
+--- a/docs/BENCHMARK.md
++++ b/docs/BENCHMARK.md
+@@ -44,6 +44,7 @@ Revision verification is mandatory by default. An explicit mismatch override exi
+ ## Runtime and hybrid targets
+ 
+ Runtime cases use declarative JSON specs under `benchmarks/runtime/`. A spec names an import root, public module/class, constructor arguments, and synthetic tensor recipes. The benchmark runner owns execution/tracing mechanics; repository-specific Python code is not added to ArchTrace core.
++Constructor arguments may recursively use `$kind: "import"` for symbolic objects such as framework dtypes, or `$kind: "construct"` for repository-native config objects. This keeps configuration declarative while avoiding repository-specific Python adapters.
+ 
+ ```bash
+ # Run inside an isolated environment that contains PyTorch and the spec's required imports.
+diff --git a/src/archtrace/benchmark/runtime.py b/src/archtrace/benchmark/runtime.py
+index c36de61..71c5c24 100644
+--- a/src/archtrace/benchmark/runtime.py
++++ b/src/archtrace/benchmark/runtime.py
+@@ -135,9 +135,7 @@ def run_hybrid_benchmark(
+ ) -> BenchmarkResult:
+     started = perf_counter()
+     root = Path(repository).resolve()
+-    preflight = _benchmark_preflight(
+-        case, root, allow_revision_mismatch, mode=BenchmarkMode.HYBRID
+-    )
++    preflight = _benchmark_preflight(case, root, allow_revision_mismatch, mode=BenchmarkMode.HYBRID)
+     if isinstance(preflight, BenchmarkResult):
+         return preflight
+     actual_revision, failures = preflight
+@@ -242,9 +240,7 @@ def _execute_pytorch_target(
+             f"unsupported runtime framework: {spec.framework}",
+         )
+     missing = [
+-        name
+-        for name in ["torch", *spec.required_imports]
+-        if importlib.util.find_spec(name) is None
++        name for name in ["torch", *spec.required_imports] if importlib.util.find_spec(name) is None
+     ]
+     if missing:
+         raise _RuntimeBenchmarkError(
+@@ -281,7 +277,11 @@ def _execute_pytorch_target(
+         try:
+             torch = importlib.import_module("torch")
+             torch.manual_seed(spec.seed)
+-            model = target(**spec.constructor_kwargs)
++            constructor_kwargs = {
++                key: _materialize_constructor_value(value)
++                for key, value in spec.constructor_kwargs.items()
++            }
++            model = target(**constructor_kwargs)
+         except Exception as exc:
+             raise _RuntimeBenchmarkError(
+                 FailureCategory.RUNTIME_CONSTRUCTION_FAILURE,
+@@ -293,9 +293,7 @@ def _execute_pytorch_target(
+             if spec.eval_mode and hasattr(model, "eval"):
+                 model.eval()
+             args = tuple(_materialize_value(item, torch) for item in spec.args)
+-            kwargs = {
+-                key: _materialize_value(item, torch) for key, item in spec.kwargs.items()
+-            }
++            kwargs = {key: _materialize_value(item, torch) for key, item in spec.kwargs.items()}
+             parameter_count = sum(int(parameter.numel()) for parameter in model.parameters())
+             trace_started = perf_counter()
+             grad_context = torch.no_grad() if spec.no_grad else nullcontext()
+@@ -337,6 +335,71 @@ def _execute_pytorch_target(
+         )
+ 
+ 
++def _materialize_constructor_value(value: Any) -> Any:
++    """Materialize declarative constructor values without repository-specific code.
++
++    Two reserved object forms are supported recursively:
++    ``{"$kind": "import", "module": "torch", "symbol": "float32"}``
++    returns an imported object, while ``{"$kind": "construct", ...}`` invokes a
++    declared factory/class with recursively materialized args and kwargs.
++    """
++    if isinstance(value, list):
++        return [_materialize_constructor_value(item) for item in value]
++    if not isinstance(value, dict):
++        return value
++
++    kind = value.get("$kind")
++    if kind is None:
++        return {key: _materialize_constructor_value(item) for key, item in value.items()}
++    if kind not in {"import", "construct"}:
++        raise _RuntimeBenchmarkError(
++            FailureCategory.RUNTIME_SPEC_INVALID,
++            f"unknown constructor value kind: {kind!r}",
++        )
++
++    module_name = value.get("module")
++    symbol_name = value.get("symbol")
++    if not isinstance(module_name, str) or not isinstance(symbol_name, str):
++        raise _RuntimeBenchmarkError(
++            FailureCategory.RUNTIME_SPEC_INVALID,
++            "constructor import/construct values require string module and symbol",
++        )
++    try:
++        module = importlib.import_module(module_name)
++        target = _resolve_symbol(module, symbol_name)
++    except (ImportError, AttributeError) as exc:
++        raise _RuntimeBenchmarkError(
++            FailureCategory.RUNTIME_SPEC_INVALID,
++            f"cannot materialize {module_name}.{symbol_name}: {type(exc).__name__}: {exc}",
++        ) from exc
++    if kind == "import":
++        return target
++
++    raw_args = value.get("args", [])
++    raw_kwargs = value.get("kwargs", {})
++    if not isinstance(raw_args, list) or not isinstance(raw_kwargs, dict):
++        raise _RuntimeBenchmarkError(
++            FailureCategory.RUNTIME_SPEC_INVALID,
++            "construct values require list args and object kwargs",
++        )
++    args = [_materialize_constructor_value(item) for item in raw_args]
++    kwargs = {key: _materialize_constructor_value(item) for key, item in raw_kwargs.items()}
++    try:
++        return target(*args, **kwargs)
++    except Exception as exc:
++        raise _RuntimeBenchmarkError(
++            FailureCategory.RUNTIME_CONSTRUCTION_FAILURE,
++            f"cannot construct {module_name}.{symbol_name}: {type(exc).__name__}: {exc}",
++        ) from exc
++
++
++def _resolve_symbol(module: Any, symbol: str) -> Any:
++    value = module
++    for part in symbol.split("."):
++        value = getattr(value, part)
++    return value
++
++
+ def _materialize_value(spec: RuntimeValueSpec, torch: Any) -> Any:
+     if spec.kind == "scalar":
+         return spec.value
+diff --git a/tests/test_benchmark_runtime.py b/tests/test_benchmark_runtime.py
+index 1ab6943..6ae73f9 100644
+--- a/tests/test_benchmark_runtime.py
++++ b/tests/test_benchmark_runtime.py
+@@ -75,3 +75,43 @@ def test_runtime_benchmark_reports_missing_dependency(tmp_path: Path) -> None:
+     result = run_runtime_benchmark(case, tmp_path, spec)
+     assert result.status == BenchmarkStatus.FAILED
+     assert result.failures[-1].category == FailureCategory.RUNTIME_DEPENDENCY_MISSING
++
++
++def test_runtime_constructor_values_support_imports_and_factories(tmp_path: Path) -> None:
++    (tmp_path / "configured_model.py").write_text(
++        "from dataclasses import dataclass\n"
++        "import torch\n"
++        "import torch.nn as nn\n\n"
++        "@dataclass\n"
++        "class TinyConfig:\n"
++        "    dim: int\n\n"
++        "class TinyConfigured(nn.Module):\n"
++        "    def __init__(self, config, dtype):\n"
++        "        super().__init__()\n"
++        "        self.proj = nn.Linear(config.dim, config.dim, dtype=dtype)\n\n"
++        "    def forward(self, x):\n"
++        "        return self.proj(x)\n",
++        encoding="utf-8",
++    )
++    case = BenchmarkCase(id="configured", repository="local", revision="1234567")
++    spec = RuntimeTargetSpec(
++        module="configured_model",
++        symbol="TinyConfigured",
++        constructor_kwargs={
++            "config": {
++                "$kind": "construct",
++                "module": "configured_model",
++                "symbol": "TinyConfig",
++                "kwargs": {"dim": 3},
++            },
++            "dtype": {"$kind": "import", "module": "torch", "symbol": "float32"},
++        },
++        args=[RuntimeValueSpec(shape=[2, 3], dtype="float32", generator="randn")],
++        expected_output_shapes=[[2, 3]],
++        capture_fx=False,
++        capture_export=False,
++    )
++    result = run_runtime_benchmark(case, tmp_path, spec)
++    assert result.status == BenchmarkStatus.COMPLETED
++    assert isinstance(result.metrics, RuntimeBenchmarkMetrics)
++    assert result.metrics.parameter_count == 12
+-- 
+2.53.0
