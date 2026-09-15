@@ -1,0 +1,34 @@
+{
+  "schema_version": "1",
+  "framework": "pytorch",
+  "import_root": ".",
+  "module": "src.models.vision_transformer",
+  "symbol": "VisionTransformer",
+  "constructor_kwargs": {
+    "img_size": [32, 32],
+    "patch_size": 16,
+    "num_frames": 4,
+    "tubelet_size": 2,
+    "embed_dim": 32,
+    "depth": 2,
+    "num_heads": 4,
+    "mlp_ratio": 2.0,
+    "use_sdpa": true
+  },
+  "args": [
+    {
+      "kind": "tensor",
+      "shape": [2, 3, 4, 32, 32],
+      "dtype": "float32",
+      "generator": "randn"
+    }
+  ],
+  "required_imports": ["numpy"],
+  "seed": 7,
+  "eval_mode": true,
+  "no_grad": true,
+  "capture_operators": true,
+  "capture_fx": false,
+  "capture_export": false,
+  "expected_output_shapes": [[2, 8, 32]]
+}
