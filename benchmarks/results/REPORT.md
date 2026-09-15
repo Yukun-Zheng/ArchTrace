@@ -25,6 +25,7 @@
 
 | Case | Status | Trace | Source defs | External defs | Occurrences | Values |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| robotwin-sapien | completed | 64.19s | 17 | 1 | 29 | 59 |
 | robotwin | completed | 9.04s | 10 | 4 | 23 | 47 |
 
 ## Hybrid
@@ -35,6 +36,7 @@
 | dp3 | completed | 0.25s | 100.0% | 29 | 5558 |
 | openpi | completed | 8.08s | 100.0% | 817 | 22939 |
 | rdt | completed | 0.81s | 100.0% | 8 | 6562 |
+| robotwin-sapien | completed | 1.15s | 100.0% | 17 | 10309 |
 | robotwin | completed | 1.00s | 100.0% | 10 | 10287 |
 | vjepa2 | completed | 0.94s | 100.0% | 8 | 11986 |
 
@@ -59,6 +61,8 @@
 - **rdt (runtime)**: no recorded warnings/errors.
 - **rdt (static)**
   - `dynamic_call` (warning, n=1040): Call targets depend on runtime values and remain dynamic.
+- **robotwin-sapien (hybrid)**: no recorded warnings/errors.
+- **robotwin-sapien (runtime)**: no recorded warnings/errors.
 - **robotwin (static)**
   - `dynamic_call` (warning, n=2925): Call targets depend on runtime values and remain dynamic.
 - **robotwin (hybrid)**: no recorded warnings/errors.
