@@ -105,6 +105,7 @@ def repository_index_to_atir(index: RepositoryIndex) -> ArchTraceIR:
                 attributes={
                     "module": symbol.module,
                     "qualname": symbol.qualname,
+                    "bases": symbol.bases,
                 },
             )
         )

@@ -5,10 +5,12 @@ from pathlib import Path
 from archtrace.ir import EdgeKind
 from archtrace.static import (
     BoundaryFlowKind,
+    ConfigReferenceStatus,
     RepositoryIndex,
     analyze_interprocedural_flow,
     index_repository,
     repository_index_to_atir,
+    resolve_config_references,
 )
 
 
@@ -150,3 +152,43 @@ def main():
 
 def _caller_qualname(index: RepositoryIndex, symbol_id: str) -> str:
     return next(symbol.qualname for symbol in index.symbols if symbol.id == symbol_id)
+
+
+def test_hydra_pathlib_expression_resolves_without_execution(tmp_path: Path) -> None:
+    (tmp_path / "conf").mkdir()
+    (tmp_path / "conf" / "train.yaml").write_text("model:\n  hidden: 64\n", encoding="utf-8")
+    (tmp_path / "train.py").write_text(
+        "import pathlib\nimport hydra\n\n"
+        "@hydra.main(\n"
+        "    version_base=None,\n"
+        "    config_path=str(pathlib.Path(__file__).parent.joinpath('conf')),\n"
+        "    config_name=pathlib.Path(__file__).stem,\n"
+        ")\n"
+        "def main(cfg):\n    return cfg\n",
+        encoding="utf-8",
+    )
+    index = index_repository(tmp_path)
+    entry_by_id = {entry.id: entry for entry in index.config_entries}
+    reference = next(
+        item
+        for item in resolve_config_references(index)
+        if entry_by_id[item.source_entry_id].kind == "hydra_entrypoint"
+    )
+    assert reference.status == ConfigReferenceStatus.RESOLVED
+    target_paths = {
+        entry.path for entry in index.config_entries if entry.id in reference.target_entry_ids
+    }
+    assert target_paths == {"conf/train.yaml"}
+
+
+def test_dynamic_omegaconf_path_is_not_reported_as_missing_file(tmp_path: Path) -> None:
+    (tmp_path / "loader.py").write_text(
+        "from omegaconf import OmegaConf\n\n"
+        "def load(cfg_path):\n    return OmegaConf.load(cfg_path)\n",
+        encoding="utf-8",
+    )
+    index = index_repository(tmp_path)
+    reference = next(iter(resolve_config_references(index)))
+    assert reference.status == ConfigReferenceStatus.DYNAMIC
+    assert reference.candidate_paths == []
+    assert reference.target_entry_ids == []

@@ -11,6 +11,7 @@ from archtrace.static.python_index import ConfigEntry, RepositoryIndex
 
 class ConfigReferenceStatus(StrEnum):
     RESOLVED = "resolved"
+    DYNAMIC = "dynamic"
     UNRESOLVED = "unresolved"
 
 
@@ -32,12 +33,30 @@ def resolve_config_references(index: RepositoryIndex) -> list[ConfigReference]:
 
     references: list[ConfigReference] = []
     for entry in index.config_entries:
+        if entry.kind not in {"omegaconf_load", "hydra_entrypoint"}:
+            continue
+        dynamic_fields = entry.metadata.get("dynamic_fields", [])
+        if isinstance(dynamic_fields, list) and dynamic_fields:
+            references.append(
+                ConfigReference(
+                    source_entry_id=entry.id,
+                    status=ConfigReferenceStatus.DYNAMIC,
+                )
+            )
+            continue
         if entry.kind == "omegaconf_load":
             candidates = _omegaconf_candidates(entry)
-        elif entry.kind == "hydra_entrypoint":
-            candidates = _hydra_candidates(entry)
         else:
-            continue
+            candidates = _hydra_candidates(entry)
+            if isinstance(entry.value, dict) and not entry.value.get("config_name"):
+                references.append(
+                    ConfigReference(
+                        source_entry_id=entry.id,
+                        status=ConfigReferenceStatus.DYNAMIC,
+                        candidate_paths=candidates,
+                    )
+                )
+                continue
 
         targets: list[str] = []
         for candidate in candidates:
@@ -58,6 +77,8 @@ def resolve_config_references(index: RepositoryIndex) -> list[ConfigReference]:
 def _omegaconf_candidates(entry: ConfigEntry) -> list[str]:
     if not isinstance(entry.value, str) or not entry.value:
         return []
+    if entry.metadata.get("config_path_repository_relative") is True:
+        return [_normalize_path(entry.value)]
     return [_relative_candidate(entry.path, entry.value)]
 
 
@@ -72,9 +93,12 @@ def _hydra_candidates(entry: ConfigEntry) -> list[str]:
     if raw_path is not None and not isinstance(raw_path, str):
         return []
 
-    base = Path(entry.path).parent
-    if isinstance(raw_path, str) and raw_path:
-        base = base / raw_path
+    if entry.metadata.get("config_path_repository_relative") is True:
+        base = Path(raw_path or "")
+    else:
+        base = Path(entry.path).parent
+        if isinstance(raw_path, str) and raw_path:
+            base = base / raw_path
 
     name = Path(raw_name)
     names = [name] if name.suffix else [Path(f"{raw_name}.yaml"), Path(f"{raw_name}.yml")]

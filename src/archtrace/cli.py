@@ -10,6 +10,13 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from archtrace.benchmark import (
+    BenchmarkResult,
+    load_benchmark_manifest,
+    render_markdown_report,
+    run_static_benchmark,
+    write_benchmark_result,
+)
 from archtrace.ingest import build_static_ir, scan_repository
 from archtrace.ir import load_atir_json
 from archtrace.web_bundle import embed_source_files
@@ -20,6 +27,8 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 console = Console()
+benchmark_app = typer.Typer(help="Run reproducible real-world repository benchmarks.")
+app.add_typer(benchmark_app, name="benchmark")
 
 
 @app.command()
@@ -124,6 +133,87 @@ def web_bundle(
         "[green]Web bundle written[/green] "
         f"{output} ({bundle_info.get('embedded_files', 0)} source files embedded)"
     )
+
+
+@benchmark_app.command("list")
+def benchmark_list(
+    manifest: Annotated[
+        Path, typer.Argument(help="Benchmark manifest TOML path.")
+    ] = Path("benchmarks/manifest.toml"),
+) -> None:
+    """List pinned benchmark cases and supported modes."""
+    loaded = load_benchmark_manifest(manifest)
+    table = Table(title=f"ArchTrace Benchmark {loaded.schema_version}")
+    table.add_column("Case")
+    table.add_column("Tier")
+    table.add_column("Revision")
+    table.add_column("Modes")
+    table.add_column("Repository")
+    for case in loaded.cases:
+        table.add_row(
+            case.id,
+            case.tier.value,
+            case.revision[:12],
+            ", ".join(mode.value for mode in case.modes),
+            case.repository,
+        )
+    console.print(table)
+
+
+@benchmark_app.command("static")
+def benchmark_static(
+    manifest: Annotated[Path, typer.Argument(help="Benchmark manifest TOML path.")],
+    case_id: Annotated[str, typer.Argument(help="Pinned benchmark case ID.")],
+    repository: Annotated[Path, typer.Argument(help="Checked-out repository path.")],
+    output: Annotated[
+        Path | None, typer.Option("--output", "-o", help="Result JSON output path.")
+    ] = None,
+    allow_revision_mismatch: Annotated[
+        bool,
+        typer.Option(
+            "--allow-revision-mismatch",
+            help="Allow exploratory runs on a revision other than the pinned commit.",
+        ),
+    ] = False,
+) -> None:
+    """Run the static benchmark without importing target repository code."""
+    case = load_benchmark_manifest(manifest).case(case_id)
+    result = run_static_benchmark(
+        case, repository, allow_revision_mismatch=allow_revision_mismatch
+    )
+    destination = output or Path("benchmarks/results") / f"{case.id}.static.json"
+    write_benchmark_result(result, destination)
+    console.print(
+        f"[green]{result.status.value}[/green] {case.id} -> {destination} "
+        f"({result.elapsed_seconds:.2f}s)"
+    )
+    if result.metrics is not None:
+        console.print(
+            f"parse={result.metrics.parse_success_rate:.1%} "
+            f"calls={result.metrics.call_resolution_rate:.1%} "
+            f"semantic={result.metrics.semantic_coverage:.1%}"
+        )
+
+
+@benchmark_app.command("report")
+def benchmark_report(
+    results: Annotated[list[Path], typer.Argument(help="Benchmark result JSON files.")],
+    output: Annotated[
+        Path | None, typer.Option("--output", "-o", help="Markdown report output path.")
+    ] = None,
+) -> None:
+    """Render a deterministic Markdown scorecard from result JSON files."""
+    loaded = [
+        BenchmarkResult.model_validate_json(path.read_text(encoding="utf-8"))
+        for path in results
+    ]
+    rendered = render_markdown_report(loaded)
+    if output is None:
+        typer.echo(rendered)
+        return
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(rendered, encoding="utf-8")
+    console.print(f"[green]Benchmark report written[/green] {output}")
 
 
 @app.command()
