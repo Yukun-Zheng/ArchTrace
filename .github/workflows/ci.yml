@@ -37,6 +37,27 @@ jobs:
       - name: Pytest
         run: pytest
 
+  python-probe-agent-310:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Compile standalone probe files
+        run: >-
+          python -m py_compile
+          src/archtrace/runtime/python_probe_agent.py
+          src/archtrace/runtime/python_probe_driver.py
+          tests/compat/probe_agent_smoke.py
+          benchmarks/scenarios/robotwin_xpolicy_contract.py
+
+      - name: Python 3.10 probe smoke
+        run: python tests/compat/probe_agent_smoke.py
+
   pytorch-runtime:
     runs-on: ubuntu-latest
 

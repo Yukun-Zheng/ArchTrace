@@ -1,0 +1,78 @@
+{
+  "schema_version": "1",
+  "framework": "python",
+  "scenario": "../scenarios/robotwin_xpolicy_contract.py",
+  "python_paths": [
+    ".",
+    "scripts",
+    "description/utils"
+  ],
+  "required_imports": [
+    "numpy",
+    "yaml",
+    "sapien"
+  ],
+  "probes": [
+    {
+      "module": "scripts.eval_policy_xpolicylab",
+      "symbol": "robotwin_obs_to_xpolicylab",
+      "role": "adapter"
+    },
+    {
+      "module": "scripts.eval_policy_xpolicylab",
+      "symbol": "convert_vision",
+      "role": "adapter"
+    },
+    {
+      "module": "scripts.eval_policy_xpolicylab",
+      "symbol": "convert_camera",
+      "role": "adapter"
+    },
+    {
+      "module": "scripts.eval_policy_xpolicylab",
+      "symbol": "convert_state",
+      "role": "adapter"
+    },
+    {
+      "module": "scripts.eval_policy_xpolicylab",
+      "symbol": "normalize_action_chunk",
+      "role": "adapter"
+    },
+    {
+      "module": "scripts.eval_policy_xpolicylab",
+      "symbol": "xpolicylab_action_to_robotwin",
+      "role": "adapter"
+    },
+    {
+      "module": "scripts.eval_policy_xpolicylab",
+      "symbol": "normalize_robotwin_action_type",
+      "role": "adapter"
+    },
+    {
+      "module": "scripts.eval_policy_xpolicylab",
+      "symbol": "action_array",
+      "role": "adapter"
+    },
+    {
+      "module": "scripts.eval_policy_xpolicylab",
+      "symbol": "action_gripper",
+      "role": "adapter"
+    },
+    {
+      "module": "scripts.eval_policy_xpolicylab",
+      "symbol": "first_present",
+      "role": "adapter"
+    }
+  ],
+  "resources": [
+    {
+      "path": "assets/objects/objaverse",
+      "kind": "directory"
+    },
+    {
+      "path": "assets/objects/objaverse/list.json",
+      "kind": "file",
+      "sha256": "9c33b70f6e91788033d6cc3e1d58fe0ad09ced472679440083b31513f9c4bc6f"
+    }
+  ]
+}

@@ -1,0 +1,88 @@
+{
+  "schema_version": "1",
+  "case_id": "robotwin",
+  "repository": "https://github.com/RoboTwin-Platform/RoboTwin.git",
+  "expected_revision": "6dde57155eafa3e4ebf6ad1f93a7cf7d5d41a755",
+  "actual_revision": "6dde57155eafa3e4ebf6ad1f93a7cf7d5d41a755",
+  "analyzer_revision": "bae60f6030ea9b523fc16ff6616435649342e03b",
+  "analyzer_dirty": false,
+  "mode": "hybrid",
+  "status": "completed",
+  "elapsed_seconds": 11.712115581845865,
+  "metrics": {
+    "metric_kind": "hybrid",
+    "reconciliation_seconds": 0.9962626930791885,
+    "static_nodes": 10203,
+    "static_edges": 13982,
+    "runtime_nodes": 84,
+    "runtime_edges": 107,
+    "merged_nodes": 10287,
+    "merged_edges": 14099,
+    "target_runtime_definitions": 10,
+    "aligned_target_runtime_definitions": 10,
+    "target_alignment_rate": 1.0,
+    "target_operator_definitions": 0,
+    "source_alignments": 10,
+    "alias_edges": 10,
+    "coverage_records": 10,
+    "always_observed": 10,
+    "sometimes_observed": 0,
+    "static_reachable_unobserved": 0
+  },
+  "failures": [],
+  "metadata": {
+    "target_python_version": "3.10.21",
+    "target_python": "/home/ubuntu/miniforge3/envs/cvpr2027-robotwin/bin/python",
+    "runtime_cwd": "/home/ubuntu/CVPR2027/RoboTwin",
+    "runtime_resources": [
+      {
+        "path": "assets/objects/objaverse",
+        "kind": "directory",
+        "sha256": null,
+        "size_bytes": null
+      },
+      {
+        "path": "assets/objects/objaverse/list.json",
+        "kind": "file",
+        "sha256": "9c33b70f6e91788033d6cc3e1d58fe0ad09ced472679440083b31513f9c4bc6f",
+        "size_bytes": 22531
+      }
+    ],
+    "scenario_output": {
+      "bridge_source": "/home/ubuntu/ArchTrace-Benchmarks/repos/robotwin/scripts/eval_policy_xpolicylab.py",
+      "runtime_cwd": "/home/ubuntu/CVPR2027/RoboTwin",
+      "vision_keys": [
+        "cam_head",
+        "cam_left_wrist",
+        "cam_right_wrist"
+      ],
+      "state_keys": [
+        "left_arm_joint_state",
+        "left_ee_joint_state",
+        "left_ee_pose",
+        "right_arm_joint_state",
+        "right_ee_joint_state",
+        "right_ee_pose"
+      ],
+      "action_shape": [
+        14
+      ],
+      "action_type": "qpos"
+    },
+    "probe_count": 10,
+    "external_definition_count": 4,
+    "raw_trace": {
+      "definitions": 14,
+      "occurrences": 23,
+      "values": 47,
+      "edges": 107
+    },
+    "stage_seconds": {
+      "static": 2.146490226034075,
+      "system_runtime": 8.519469474907964,
+      "reconciliation": 0.9962626930791885
+    },
+    "source_alignment_count": 10,
+    "unaligned_target_definitions": []
+  }
+}

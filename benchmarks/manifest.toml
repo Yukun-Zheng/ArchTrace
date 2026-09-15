@@ -65,3 +65,4 @@ tier = "system"
 modes = ["static", "runtime", "hybrid"]
 tags = ["robotics", "simulation", "benchmark", "environment"]
 notes = "RoboTwin system-level pipeline; declared submodules are benchmarked explicitly."
+system_spec = "system/robotwin-xpolicy-contract.json"

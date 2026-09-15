@@ -7,6 +7,7 @@ from archtrace.benchmark.models import (
     HybridBenchmarkMetrics,
     RuntimeBenchmarkMetrics,
     StaticBenchmarkMetrics,
+    SystemRuntimeBenchmarkMetrics,
 )
 
 
@@ -18,6 +19,9 @@ def render_markdown_report(results: list[BenchmarkResult]) -> str:
     runtime_results = [
         result for result in results if isinstance(result.metrics, RuntimeBenchmarkMetrics)
     ]
+    system_results = [
+        result for result in results if isinstance(result.metrics, SystemRuntimeBenchmarkMetrics)
+    ]
     hybrid_results = [
         result for result in results if isinstance(result.metrics, HybridBenchmarkMetrics)
     ]
@@ -27,6 +31,10 @@ def render_markdown_report(results: list[BenchmarkResult]) -> str:
         if len(lines) > 2:
             lines.append("")
         lines.extend(_runtime_table(runtime_results))
+    if system_results:
+        if len(lines) > 2:
+            lines.append("")
+        lines.extend(_system_runtime_table(system_results))
     if hybrid_results:
         if len(lines) > 2:
             lines.append("")
@@ -101,5 +109,24 @@ def _hybrid_table(results: list[BenchmarkResult]) -> list[str]:
             f"{result.case_id} | {result.status.value} | "
             f"{metrics.reconciliation_seconds:.2f}s | {metrics.target_alignment_rate:.1%} | "
             f"{metrics.source_alignments} | {metrics.merged_nodes} |"
+        )
+    return lines
+
+
+def _system_runtime_table(results: list[BenchmarkResult]) -> list[str]:
+    lines = [
+        "## System Runtime",
+        "",
+        "| Case | Status | Trace | Source defs | External defs | Occurrences | Values |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for result in results:
+        metrics = result.metrics
+        assert isinstance(metrics, SystemRuntimeBenchmarkMetrics)
+        lines.append(
+            "| "
+            f"{result.case_id} | {result.status.value} | {metrics.trace_seconds:.2f}s | "
+            f"{metrics.source_definitions} | {metrics.external_definitions} | "
+            f"{metrics.occurrences} | {metrics.values} |"
         )
     return lines

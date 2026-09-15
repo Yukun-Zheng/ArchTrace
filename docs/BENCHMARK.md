@@ -67,3 +67,29 @@ For openpi, the official PyTorch path requires `transformers==4.53.2` plus `src/
 
 Hybrid source alignment is defined over **target-owned runtime module definitions**. Source-grounded `aten.*` operator definitions are reported separately; they are finer-grained execution evidence and are not treated as failed module-definition alignments.
 Large hybrid runs store the complete alignment count in metrics/metadata but cap the inline alignment examples at 50 records so benchmark snapshots remain reviewable across commits.
+
+## Cross-runtime system probes
+
+Repository-scale robotics systems are not always a single in-process `torch.nn.Module`. RoboTwin's XPolicyLab evaluation path, for example, crosses simulator, observation conversion, policy transport, action conversion, and simulator actuation boundaries. ArchTrace models that path with selective Python probes rather than pretending the full control loop is a tensor graph.
+
+The system runtime is split deliberately:
+
+1. a **stdlib-only raw probe agent** runs inside the target Python process and wraps only declared functions/methods;
+2. the target process emits neutral raw JSON containing source spans, concrete call occurrences, payload summaries, and control/data edges;
+3. an ArchTrace Python >=3.11 process normalizes that evidence into ATIR and optionally reconciles it with repository-static ATIR.
+
+This lets ArchTrace trace a Python 3.10 simulator environment without installing the ArchTrace package into that environment. External services remain explicit boundaries. A stubbed policy RPC, for example, is represented as a source-less transport definition with `stubbed=true`; ArchTrace does not manufacture remote model internals.
+
+```bash
+archtrace benchmark system-runtime benchmarks/manifest.toml robotwin /path/to/RoboTwin \
+  --target-python /path/to/robotwin-env/bin/python \
+  --runtime-cwd /path/to/runtime-assets \
+  -o benchmarks/results/robotwin.system.runtime.json
+
+archtrace benchmark system-hybrid benchmarks/manifest.toml robotwin /path/to/RoboTwin \
+  --target-python /path/to/robotwin-env/bin/python \
+  --runtime-cwd /path/to/runtime-assets \
+  -o benchmarks/results/robotwin.system.hybrid.json
+```
+
+`--runtime-cwd` supplies external runtime resources only. The standalone driver prepends the pinned repository checkout to `sys.path`, and benchmark scenarios are expected to verify that probed code was imported from that checkout. System specs may declare required runtime files/directories and optional SHA256 fingerprints; these are verified before the target process starts and recorded in benchmark metadata, so external asset bundles are explicit reproducibility inputs rather than hidden machine state. The current RoboTwin contract scenario executes the real observation/action adapters while leaving policy RPC and simulator observation/actuation as explicit stubbed boundaries; a later scenario will replace the simulator stubs with a real SAPIEN episode while preserving the same probe protocol.

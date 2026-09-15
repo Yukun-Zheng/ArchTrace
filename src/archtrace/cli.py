@@ -16,10 +16,13 @@ from archtrace.benchmark import (
     load_benchmark_manifest,
     load_runtime_environment,
     load_runtime_spec,
+    load_system_spec,
     render_markdown_report,
     run_hybrid_benchmark,
     run_runtime_benchmark,
     run_static_benchmark,
+    run_system_benchmark,
+    run_system_hybrid_benchmark,
     write_benchmark_result,
 )
 from archtrace.ingest import build_static_ir, scan_repository
@@ -272,6 +275,98 @@ def benchmark_hybrid(
     write_benchmark_result(result, destination)
     console.print(
         f"[green]{result.status.value}[/green] {case.id} hybrid -> {destination} "
+        f"({result.elapsed_seconds:.2f}s)"
+    )
+
+
+@benchmark_app.command("system-runtime")
+def benchmark_system_runtime(
+    manifest: Annotated[Path, typer.Argument(help="Benchmark manifest TOML path.")],
+    case_id: Annotated[str, typer.Argument(help="Pinned benchmark case ID.")],
+    repository: Annotated[Path, typer.Argument(help="Checked-out repository path.")],
+    target_python: Annotated[
+        Path, typer.Option("--target-python", help="Python executable for the target runtime.")
+    ],
+    runtime_cwd: Annotated[
+        Path | None,
+        typer.Option(
+            "--runtime-cwd",
+            help="Optional runtime working directory for external assets/resources.",
+        ),
+    ] = None,
+    output: Annotated[
+        Path | None, typer.Option("--output", "-o", help="Result JSON output path.")
+    ] = None,
+    allow_revision_mismatch: Annotated[
+        bool, typer.Option("--allow-revision-mismatch")
+    ] = False,
+) -> None:
+    """Run a cross-runtime Python system scenario through the stdlib probe agent."""
+    loaded = load_benchmark_manifest(manifest)
+    case = loaded.case(case_id)
+    if case.system_spec is None:
+        raise typer.BadParameter(f"benchmark case {case_id!r} has no system_spec")
+    spec_path = manifest.parent / case.system_spec
+    spec = load_system_spec(spec_path)
+    result = run_system_benchmark(
+        case,
+        repository,
+        spec,
+        spec_path=spec_path,
+        target_python=target_python,
+        runtime_cwd=runtime_cwd,
+        allow_revision_mismatch=allow_revision_mismatch,
+    )
+    destination = output or Path("benchmarks/results") / f"{case.id}.system.runtime.json"
+    write_benchmark_result(result, destination)
+    console.print(
+        f"[green]{result.status.value}[/green] {case.id} system runtime -> {destination} "
+        f"({result.elapsed_seconds:.2f}s)"
+    )
+
+
+@benchmark_app.command("system-hybrid")
+def benchmark_system_hybrid(
+    manifest: Annotated[Path, typer.Argument(help="Benchmark manifest TOML path.")],
+    case_id: Annotated[str, typer.Argument(help="Pinned benchmark case ID.")],
+    repository: Annotated[Path, typer.Argument(help="Checked-out repository path.")],
+    target_python: Annotated[
+        Path, typer.Option("--target-python", help="Python executable for the target runtime.")
+    ],
+    runtime_cwd: Annotated[
+        Path | None,
+        typer.Option(
+            "--runtime-cwd",
+            help="Optional runtime working directory for external assets/resources.",
+        ),
+    ] = None,
+    output: Annotated[
+        Path | None, typer.Option("--output", "-o", help="Result JSON output path.")
+    ] = None,
+    allow_revision_mismatch: Annotated[
+        bool, typer.Option("--allow-revision-mismatch")
+    ] = False,
+) -> None:
+    """Run system probes and reconcile source-grounded boundaries to static ATIR."""
+    loaded = load_benchmark_manifest(manifest)
+    case = loaded.case(case_id)
+    if case.system_spec is None:
+        raise typer.BadParameter(f"benchmark case {case_id!r} has no system_spec")
+    spec_path = manifest.parent / case.system_spec
+    spec = load_system_spec(spec_path)
+    result = run_system_hybrid_benchmark(
+        case,
+        repository,
+        spec,
+        spec_path=spec_path,
+        target_python=target_python,
+        runtime_cwd=runtime_cwd,
+        allow_revision_mismatch=allow_revision_mismatch,
+    )
+    destination = output or Path("benchmarks/results") / f"{case.id}.system.hybrid.json"
+    write_benchmark_result(result, destination)
+    console.print(
+        f"[green]{result.status.value}[/green] {case.id} system hybrid -> {destination} "
         f"({result.elapsed_seconds:.2f}s)"
     )
 
