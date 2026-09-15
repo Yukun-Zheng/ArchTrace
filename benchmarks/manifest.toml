@@ -66,3 +66,14 @@ modes = ["static", "runtime", "hybrid"]
 tags = ["robotics", "simulation", "benchmark", "environment"]
 notes = "RoboTwin system-level pipeline; declared submodules are benchmarked explicitly."
 system_spec = "system/robotwin-xpolicy-contract.json"
+
+[[case]]
+id = "robotwin-sapien"
+repository = "https://github.com/RoboTwin-Platform/RoboTwin.git"
+revision = "6dde57155eafa3e4ebf6ad1f93a7cf7d5d41a755"
+branch = "main"
+tier = "system"
+modes = ["runtime", "hybrid"]
+tags = ["robotics", "simulation", "sapien", "environment", "real-episode"]
+notes = "Pinned RoboTwin code with a real SAPIEN observation/actuation step; policy RPC remains explicit."
+system_spec = "system/robotwin-sapien-episode.json"
