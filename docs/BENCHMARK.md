@@ -40,3 +40,18 @@ archtrace benchmark report benchmarks/results/dp3.static.json \
 ```
 
 Revision verification is mandatory by default. An explicit mismatch override exists only for exploratory diagnosis; those runs are not comparable with pinned scorecards.
+
+## Runtime and hybrid targets
+
+Runtime cases use declarative JSON specs under `benchmarks/runtime/`. A spec names an import root, public module/class, constructor arguments, and synthetic tensor recipes. The benchmark runner owns execution/tracing mechanics; repository-specific Python code is not added to ArchTrace core.
+
+```bash
+# Run inside an isolated environment that contains PyTorch and the spec's required imports.
+archtrace benchmark runtime benchmarks/manifest.toml dp3 /path/to/3D-Diffusion-Policy \
+  -o benchmarks/results/dp3.runtime.json
+
+archtrace benchmark hybrid benchmarks/manifest.toml dp3 /path/to/3D-Diffusion-Policy \
+  -o benchmarks/results/dp3.hybrid.json
+```
+
+Runtime failures are explicit (`runtime_dependency_missing`, `runtime_import_failure`, `runtime_construction_failure`, `runtime_execution_failure`, etc.). Hybrid metrics use only target-repository-owned runtime definitions as the source-alignment denominator; PyTorch/einops internal module definitions are retained in ATIR but do not dilute repository alignment coverage.

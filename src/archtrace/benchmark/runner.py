@@ -31,7 +31,7 @@ def run_static_benchmark(
     """Analyze one pinned repository without importing or executing target code."""
     started = perf_counter()
     root = Path(repository).resolve()
-    analyzer_revision, analyzer_dirty = _analyzer_source_state()
+    analyzer_revision, analyzer_dirty = analyzer_source_state()
     failures: list[BenchmarkFailure] = []
 
     if not root.is_dir():
@@ -42,7 +42,7 @@ def run_static_benchmark(
             f"repository directory does not exist: {root}",
         )
 
-    actual_revision = _git_revision(root)
+    actual_revision = git_revision(root)
     if actual_revision is not None and actual_revision != case.revision:
         severity = FailureSeverity.WARNING if allow_revision_mismatch else FailureSeverity.ERROR
         failures.append(
@@ -238,7 +238,7 @@ def write_benchmark_result(result: BenchmarkResult, output: str | Path) -> None:
     output_path.write_text(result.model_dump_json(indent=2), encoding="utf-8")
 
 
-def _git_revision(root: Path) -> str | None:
+def git_revision(root: Path) -> str | None:
     try:
         completed = subprocess.run(
             ["git", "-C", str(root), "rev-parse", "HEAD"],
@@ -274,9 +274,9 @@ def _append_count_failure(
     )
 
 
-def _analyzer_source_state() -> tuple[str | None, bool | None]:
+def analyzer_source_state() -> tuple[str | None, bool | None]:
     root = Path(__file__).resolve().parents[3]
-    revision = _git_revision(root)
+    revision = git_revision(root)
     if revision is None:
         return None, None
     try:
@@ -355,7 +355,7 @@ def _failed_result(
             message=message,
         )
     )
-    analyzer_revision, analyzer_dirty = _analyzer_source_state()
+    analyzer_revision, analyzer_dirty = analyzer_source_state()
     return BenchmarkResult(
         case_id=case.id,
         repository=case.repository,
