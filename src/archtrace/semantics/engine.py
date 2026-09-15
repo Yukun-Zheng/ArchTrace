@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from collections import deque
+from dataclasses import dataclass, field
 from typing import Any
 
 from archtrace.ir import (
@@ -62,6 +63,29 @@ class SemanticOverride:
     reason: str = "user correction"
 
 
+@dataclass(slots=True)
+class _SemanticGraphIndex:
+    node_by_id: dict[str, ArchNode]
+    flow_in: dict[str, list[str]]
+    flow_out: dict[str, list[str]]
+    containment_children: dict[str, list[str]]
+
+
+@dataclass(slots=True)
+class _IdAllocator:
+    used_ids: set[str]
+    next_indices: dict[str, int] = field(default_factory=dict)
+
+    def next(self, prefix: str) -> str:
+        index = self.next_indices.get(prefix, 0)
+        while f"{prefix}.{index:07d}" in self.used_ids:
+            index += 1
+        value = f"{prefix}.{index:07d}"
+        self.used_ids.add(value)
+        self.next_indices[prefix] = index + 1
+        return value
+
+
 def recover_semantics(
     graph: ArchTraceIR,
     *,
@@ -81,13 +105,15 @@ def recover_semantics(
     mechanical_nodes = [
         node for node in result.nodes if node.level not in {NodeLevel.SEMANTIC, NodeLevel.PAPER}
     ]
-    node_by_id = {node.id: node for node in result.nodes}
-    modalities = _propagate_modalities(result, mechanical_nodes)
+    graph_index = _build_semantic_graph_index(result, mechanical_nodes)
+    node_by_id = graph_index.node_by_id
+    modalities = _propagate_modalities(mechanical_nodes, graph_index.flow_out)
     hypotheses = {
-        node.id: _infer_node_hypotheses(node, result, modalities) for node in mechanical_nodes
+        node.id: _infer_node_hypotheses(node, modalities, graph_index.flow_in)
+        for node in mechanical_nodes
     }
 
-    used_ids = _all_record_ids(result)
+    id_allocator = _IdAllocator(_all_record_ids(result))
     overridden_ids = {
         member_id for override in overrides or [] for member_id in override.member_ids
     }
@@ -97,12 +123,15 @@ def recover_semantics(
         hypotheses,
         min_confidence,
         overridden_ids,
+        node_by_id=graph_index.node_by_id,
+        containment_children=graph_index.containment_children,
     )
 
     for anchor_id, hypothesis, member_ids in grouped:
         _append_semantic_group(
             result,
-            used_ids,
+            id_allocator,
+            graph_index.node_by_id,
             anchor_id=anchor_id,
             hypothesis=hypothesis,
             member_ids=member_ids,
@@ -129,7 +158,8 @@ def recover_semantics(
         )
         _append_semantic_group(
             result,
-            used_ids,
+            id_allocator,
+            graph_index.node_by_id,
             anchor_id=override.member_ids[0],
             hypothesis=hypothesis,
             member_ids=list(override.member_ids),
@@ -176,8 +206,10 @@ def _group_candidates(
     hypotheses: dict[str, list[SemanticHypothesis]],
     min_confidence: float,
     overridden_ids: set[str],
+    *,
+    node_by_id: dict[str, ArchNode],
+    containment_children: dict[str, list[str]],
 ) -> list[tuple[str, SemanticHypothesis, list[str]]]:
-    node_by_id = {node.id: node for node in graph.nodes}
     candidates_by_anchor: dict[str, list[tuple[str, SemanticHypothesis]]] = {}
     for node in mechanical_nodes:
         if node.id in overridden_ids or not hypotheses[node.id]:
@@ -198,7 +230,9 @@ def _group_candidates(
         winner = choices[0][1]
         if winner.confidence < min_confidence or winner.role == SemanticRole.UNKNOWN:
             continue
-        member_ids = _anchor_members(anchor_id, graph, overridden_ids)
+        member_ids = _anchor_members(
+            anchor_id, node_by_id, containment_children, overridden_ids
+        )
         if not member_ids:
             continue
         groups.append((anchor_id, winner, member_ids))
@@ -207,8 +241,8 @@ def _group_candidates(
 
 def _infer_node_hypotheses(
     node: ArchNode,
-    graph: ArchTraceIR,
     modalities: dict[str, set[Modality]],
+    flow_in: dict[str, list[str]],
 ) -> list[SemanticHypothesis]:
     text = _node_text(node)
     scored: dict[SemanticRole, tuple[float, list[str]]] = {}
@@ -240,7 +274,7 @@ def _infer_node_hypotheses(
         elif confidence == current[0]:
             current[1].append(reason)
 
-    incoming_modalities = _incoming_modalities(node.id, graph, modalities)
+    incoming_modalities = _incoming_modalities(node.id, flow_in, modalities)
     primary = incoming_modalities & _PRIMARY_MODALITIES
     if len(primary) >= 2:
         confidence = 0.82
@@ -289,26 +323,53 @@ def _structural_role(
     return None
 
 
-def _propagate_modalities(
+def _build_semantic_graph_index(
     graph: ArchTraceIR,
+    mechanical_nodes: list[ArchNode],
+) -> _SemanticGraphIndex:
+    node_by_id = {node.id: node for node in graph.nodes}
+    mechanical_ids = {node.id for node in mechanical_nodes}
+    flow_in: dict[str, list[str]] = {}
+    flow_out: dict[str, list[str]] = {}
+    containment_children: dict[str, list[str]] = {}
+    for edge in graph.edges:
+        if edge.kind == EdgeKind.CONTAINS:
+            containment_children.setdefault(edge.source, []).append(edge.target)
+        if (
+            edge.kind in _FLOW_EDGE_KINDS
+            and edge.source in mechanical_ids
+            and edge.target in mechanical_ids
+        ):
+            flow_out.setdefault(edge.source, []).append(edge.target)
+            flow_in.setdefault(edge.target, []).append(edge.source)
+    for mapping in (flow_in, flow_out, containment_children):
+        for values in mapping.values():
+            values.sort()
+    return _SemanticGraphIndex(
+        node_by_id=node_by_id,
+        flow_in=flow_in,
+        flow_out=flow_out,
+        containment_children=containment_children,
+    )
+
+
+def _propagate_modalities(
     nodes: list[ArchNode],
+    flow_out: dict[str, list[str]],
 ) -> dict[str, set[Modality]]:
     modalities = {node.id: _seed_modalities(node) for node in nodes}
-    node_ids = set(modalities)
-    flow_edges = [
-        edge
-        for edge in graph.edges
-        if edge.kind in _FLOW_EDGE_KINDS and edge.source in node_ids and edge.target in node_ids
-    ]
-
-    changed = True
-    while changed:
-        changed = False
-        for edge in flow_edges:
-            before = len(modalities[edge.target])
-            modalities[edge.target].update(modalities[edge.source])
-            if len(modalities[edge.target]) != before:
-                changed = True
+    queue = deque(node_id for node_id, values in modalities.items() if values)
+    queued = set(queue)
+    while queue:
+        source_id = queue.popleft()
+        queued.discard(source_id)
+        source_modalities = modalities[source_id]
+        for target_id in flow_out.get(source_id, []):
+            before = len(modalities[target_id])
+            modalities[target_id].update(source_modalities)
+            if len(modalities[target_id]) != before and target_id not in queued:
+                queue.append(target_id)
+                queued.add(target_id)
     return modalities
 
 
@@ -329,19 +390,19 @@ def _seed_modalities(node: ArchNode) -> set[Modality]:
 
 def _incoming_modalities(
     node_id: str,
-    graph: ArchTraceIR,
+    flow_in: dict[str, list[str]],
     modalities: dict[str, set[Modality]],
 ) -> set[Modality]:
     result: set[Modality] = set()
-    for edge in graph.edges:
-        if edge.kind in _FLOW_EDGE_KINDS and edge.target == node_id:
-            result.update(modalities.get(edge.source, set()))
+    for source_id in flow_in.get(node_id, []):
+        result.update(modalities.get(source_id, set()))
     return result
 
 
 def _append_semantic_group(
     graph: ArchTraceIR,
-    used_ids: set[str],
+    id_allocator: _IdAllocator,
+    node_by_id: dict[str, ArchNode],
     *,
     anchor_id: str,
     hypothesis: SemanticHypothesis,
@@ -349,7 +410,6 @@ def _append_semantic_group(
     user_override: SemanticOverride | None,
     machine_hypotheses: dict[str, list[SemanticHypothesis]],
 ) -> None:
-    node_by_id = {node.id: node for node in graph.nodes}
     members = [node_by_id[member_id] for member_id in member_ids]
     support_ids = sorted({evidence_id for member in members for evidence_id in member.evidence_ids})
     source = next((member.source[0] for member in members if member.source), None)
@@ -360,8 +420,8 @@ def _append_semantic_group(
         else (hypothesis.role.value if spec is None else spec.display_label)
     )
     phase = SemanticPhase.BOTH if spec is None else spec.phase
-    evidence_id = _next_id("evidence.semantic", used_ids)
-    semantic_id = _next_id("semantic.component", used_ids)
+    evidence_id = id_allocator.next("evidence.semantic")
+    semantic_id = id_allocator.next("semantic.component")
     evidence_kind = EvidenceKind.USER if user_override is not None else EvidenceKind.SEMANTIC
     status = FactStatus.CORRECTED if user_override is not None else FactStatus.INFERRED
 
@@ -415,7 +475,7 @@ def _append_semantic_group(
     for member_id in member_ids:
         graph.edges.append(
             ArchEdge(
-                id=_next_id("edge.semantic.contains", used_ids),
+                id=id_allocator.next("edge.semantic.contains"),
                 source=semantic_id,
                 target=member_id,
                 kind=EdgeKind.CONTAINS,
@@ -446,14 +506,10 @@ def _nearest_module_anchor(node: ArchNode, node_by_id: dict[str, ArchNode]) -> s
 
 def _anchor_members(
     anchor_id: str,
-    graph: ArchTraceIR,
+    node_by_id: dict[str, ArchNode],
+    containment_children: dict[str, list[str]],
     overridden_ids: set[str],
 ) -> list[str]:
-    children: dict[str, list[str]] = {}
-    for edge in graph.edges:
-        if edge.kind == EdgeKind.CONTAINS:
-            children.setdefault(edge.source, []).append(edge.target)
-    node_by_id = {node.id: node for node in graph.nodes}
     result: list[str] = []
     stack = [anchor_id]
     visited: set[str] = set()
@@ -469,7 +525,7 @@ def _anchor_members(
             and current not in overridden_ids
         ):
             result.append(current)
-        stack.extend(reversed(sorted(children.get(current, []))))
+        stack.extend(reversed(containment_children.get(current, [])))
     return sorted(set(result))
 
 
@@ -548,12 +604,3 @@ def _all_record_ids(graph: ArchTraceIR) -> set[str]:
         )
         for record in group
     }
-
-
-def _next_id(prefix: str, used_ids: set[str]) -> str:
-    index = 0
-    while f"{prefix}.{index:07d}" in used_ids:
-        index += 1
-    value = f"{prefix}.{index:07d}"
-    used_ids.add(value)
-    return value

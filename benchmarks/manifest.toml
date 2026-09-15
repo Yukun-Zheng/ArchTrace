@@ -1,0 +1,61 @@
+schema_version = "1"
+
+[[case]]
+id = "dp3"
+repository = "https://github.com/YanjieZe/3D-Diffusion-Policy.git"
+revision = "47385d9d6f5bde3f2ebdf2400ecb8261cc9e6b97"
+branch = "master"
+tier = "research"
+modes = ["static", "runtime", "hybrid"]
+tags = ["robotics", "diffusion", "point-cloud", "policy"]
+notes = "DP3 / 3D Diffusion Policy. First real-world torture target."
+
+[[case]]
+id = "diffusion-policy"
+repository = "https://github.com/real-stanford/diffusion_policy.git"
+revision = "5ba07ac6661db573af695b419a7947ecb704690f"
+branch = "main"
+tier = "research"
+modes = ["static", "runtime", "hybrid"]
+tags = ["robotics", "diffusion", "vision", "policy"]
+notes = "Canonical Diffusion Policy implementation."
+
+[[case]]
+id = "openpi"
+repository = "https://github.com/Physical-Intelligence/openpi.git"
+revision = "215abfb217dbac7d5f1273282331b9b1866c0479"
+branch = "main"
+tier = "research"
+modes = ["static", "runtime", "hybrid"]
+tags = ["robotics", "vla", "pi0", "multimodal"]
+notes = "Physical Intelligence openpi; later-stage VLA stress target."
+
+[[case]]
+id = "rdt"
+repository = "https://github.com/thu-ml/RoboticsDiffusionTransformer.git"
+revision = "cd79363a1387e8f81c7724d070ef7e45fd23150f"
+branch = "main"
+tier = "research"
+modes = ["static", "runtime", "hybrid"]
+tags = ["robotics", "diffusion", "transformer", "multimodal"]
+notes = "RDT stress target for cross-attention and diffusion transformer structure."
+
+[[case]]
+id = "vjepa2"
+repository = "https://github.com/facebookresearch/vjepa2.git"
+revision = "204698b45b3712590f06245fbfba32d3be539812"
+branch = "main"
+tier = "research"
+modes = ["static", "runtime", "hybrid"]
+tags = ["vision", "world-model", "video", "robotics"]
+notes = "V-JEPA2 visual representation and world-model stress target."
+
+[[case]]
+id = "robotwin"
+repository = "https://github.com/RoboTwin-Platform/RoboTwin.git"
+revision = "6dde57155eafa3e4ebf6ad1f93a7cf7d5d41a755"
+branch = "main"
+tier = "system"
+modes = ["static", "runtime", "hybrid"]
+tags = ["robotics", "simulation", "benchmark", "environment"]
+notes = "RoboTwin system-level pipeline; declared submodules are benchmarked explicitly."
