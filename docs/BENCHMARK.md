@@ -44,6 +44,7 @@ Revision verification is mandatory by default. An explicit mismatch override exi
 ## Runtime and hybrid targets
 
 Runtime cases use declarative JSON specs under `benchmarks/runtime/`. A spec names an import root, public module/class, constructor arguments, and synthetic tensor recipes. The benchmark runner owns execution/tracing mechanics; repository-specific Python code is not added to ArchTrace core.
+Constructor arguments may recursively use `$kind: "import"` for symbolic objects such as framework dtypes, or `$kind: "construct"` for repository-native config objects. This keeps configuration declarative while avoiding repository-specific Python adapters.
 
 ```bash
 # Run inside an isolated environment that contains PyTorch and the spec's required imports.

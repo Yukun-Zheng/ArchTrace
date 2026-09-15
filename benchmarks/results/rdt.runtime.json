@@ -1,0 +1,82 @@
+{
+  "schema_version": "1",
+  "case_id": "rdt",
+  "repository": "https://github.com/thu-ml/RoboticsDiffusionTransformer.git",
+  "expected_revision": "cd79363a1387e8f81c7724d070ef7e45fd23150f",
+  "actual_revision": "cd79363a1387e8f81c7724d070ef7e45fd23150f",
+  "analyzer_revision": "6d0646d6ee7453987d4b1fa8748f87d2fa1e9f54",
+  "analyzer_dirty": false,
+  "mode": "runtime",
+  "status": "completed",
+  "elapsed_seconds": 3.8715362169314176,
+  "metrics": {
+    "metric_kind": "runtime",
+    "trace_seconds": 0.7187881199643016,
+    "runtime_nodes": 802,
+    "runtime_edges": 948,
+    "definitions": 235,
+    "module_definitions": 73,
+    "operator_definitions": 162,
+    "occurrences": 280,
+    "values": 229,
+    "states": 58,
+    "target_source_definitions": 8,
+    "tensor_nodes": 287,
+    "tensor_spec_nodes": 287,
+    "tensor_spec_coverage": 1.0,
+    "consumes_edges": 379,
+    "produces_edges": 290,
+    "derived_from_edges": 0,
+    "parameter_count": 41864,
+    "output_tensor_count": 1
+  },
+  "failures": [],
+  "metadata": {
+    "runtime_spec": {
+      "schema_version": "1",
+      "framework": "pytorch",
+      "import_root": ".",
+      "module": "models.rdt.model",
+      "symbol": "RDT",
+      "constructor_kwargs": {
+        "output_dim": 8,
+        "horizon": 4,
+        "hidden_size": 32,
+        "depth": 2,
+        "num_heads": 4,
+        "max_lang_cond_len": 5,
+        "img_cond_len": 6,
+        "dtype": {
+          "$kind": "import",
+          "module": "torch",
+          "symbol": "float32"
+        }
+      },
+      "args": [
+        {"kind":"tensor","shape":[2,5,32],"dtype":"float32","generator":"randn","values":[],"value":null,"requires_grad":false},
+        {"kind":"tensor","shape":[2],"dtype":"float32","generator":"values","values":[25,30],"value":null,"requires_grad":false},
+        {"kind":"tensor","shape":[2],"dtype":"float32","generator":"values","values":[1,2],"value":null,"requires_grad":false},
+        {"kind":"tensor","shape":[2,5,32],"dtype":"float32","generator":"randn","values":[],"value":null,"requires_grad":false},
+        {"kind":"tensor","shape":[2,6,32],"dtype":"float32","generator":"randn","values":[],"value":null,"requires_grad":false}
+      ],
+      "kwargs": {},
+      "required_imports": ["numpy","timm","torchvision"],
+      "seed": 7,
+      "eval_mode": true,
+      "no_grad": true,
+      "capture_operators": true,
+      "capture_fx": false,
+      "capture_export": false,
+      "expected_output_shapes": [[2,4,8]]
+    },
+    "stage_seconds": {
+      "import": 3.0243528850842267,
+      "construction": 0.07338895881548524,
+      "trace": 0.7187881199643016
+    },
+    "output_shapes": [[2,4,8]],
+    "runtime_backend": "pytorch_module_hooks",
+    "operator_dispatch": true,
+    "structured_captures": []
+  }
+}
