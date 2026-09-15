@@ -1,0 +1,27 @@
+name: Apply M3.5 runtime patch
+on:
+  push:
+    branches: [real-world-runtime]
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.event.head_commit.message == 'M3.5 migration: apply verified runtime patch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: real-world-runtime
+          fetch-depth: 0
+      - name: Apply verified server patch
+        shell: bash
+        run: |
+          base64 -d .migration/runtime-m35.patch.gz.b64 | gzip -d > /tmp/runtime-m35.patch
+          git apply --check /tmp/runtime-m35.patch
+          git apply /tmp/runtime-m35.patch
+          rm -rf .migration .github/workflows/apply-runtime-m35.yml
+          git config user.name 'Yukun Zheng'
+          git config user.email 'zhengyukun2005@gmail.com'
+          git add -A
+          git commit -m 'M3.5: add declarative runtime and hybrid benchmarks'
+          git push origin HEAD:real-world-runtime
