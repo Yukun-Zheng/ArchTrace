@@ -54,6 +54,7 @@ jobs:
           src/archtrace/runtime/python_probe_driver.py
           tests/compat/probe_agent_smoke.py
           benchmarks/scenarios/robotwin_xpolicy_contract.py
+          benchmarks/scenarios/robotwin_sapien_episode.py
 
       - name: Python 3.10 probe smoke
         run: python tests/compat/probe_agent_smoke.py
