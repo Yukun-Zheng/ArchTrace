@@ -56,3 +56,14 @@ archtrace benchmark hybrid benchmarks/manifest.toml dp3 /path/to/3D-Diffusion-Po
 ```
 
 Runtime failures are explicit (`runtime_dependency_missing`, `runtime_import_failure`, `runtime_construction_failure`, `runtime_execution_failure`, etc.). Hybrid metrics use only target-repository-owned runtime definitions as the source-alignment denominator; PyTorch/einops internal module definitions are retained in ATIR but do not dilute repository alignment coverage.
+
+### Runtime environment recipes
+
+Cases with nontrivial runtime environments may set `runtime_environment` in the manifest. The JSON recipe is a **verifier, not an installer**: ArchTrace checks the Python minor version, exact public package versions, and repository-owned source overlays before execution. A package local-version suffix such as `torch==2.7.1+cpu` is accepted for a recipe that requires public version `2.7.1`.
+
+Source overlays model repositories that intentionally replace files inside an installed dependency. ArchTrace compares every repository overlay `.py` file byte-for-byte with the installed module and then remaps runtime source spans back to the repository path before static/runtime reconciliation. `require_private_copy=true` additionally rejects shared hardlinks, preventing patch operations from mutating a package-manager cache.
+
+For openpi, the official PyTorch path requires `transformers==4.53.2` plus `src/openpi/models_pytorch/transformers_replace`. The benchmark environment must therefore be created with copy semantics (for example `UV_LINK_MODE=copy`) before applying that overlay. ArchTrace does not apply the patch itself.
+
+Hybrid source alignment is defined over **target-owned runtime module definitions**. Source-grounded `aten.*` operator definitions are reported separately; they are finer-grained execution evidence and are not treated as failed module-definition alignments.
+Large hybrid runs store the complete alignment count in metrics/metadata but cap the inline alignment examples at 50 records so benchmark snapshots remain reviewable across commits.
